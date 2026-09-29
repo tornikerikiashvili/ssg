@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+if [ ! -f .env ]; then
+    cp .env.example .env
+    echo 'Created .env. Adjust local ports or credentials there if necessary.'
+fi
+
+# Bootstrap Composer before Sail is available. The full runtime is checked below.
+if [ ! -f vendor/autoload.php ]; then
+    docker run --rm --user "$(id -u):$(id -g)" \
+        -e COMPOSER_HOME=/tmp/composer \
+        -v "$PWD:/var/www/html" -w /var/www/html \
+        laravelsail/php84-composer:latest \
+        composer install --no-interaction --no-scripts \
+        --ignore-platform-req=ext-intl --ignore-platform-req=ext-gd
+fi
+
+export WWWUSER="$(id -u)"
+export WWWGROUP="$(id -g)"
+docker compose build laravel.test
+docker compose up -d laravel.test pgsql redis
+./vendor/bin/sail composer install --no-interaction
+./vendor/bin/sail composer check-platform-reqs
+if ! grep -qE '^APP_KEY=.+$' .env; then
+    ./vendor/bin/sail artisan key:generate
+fi
+./vendor/bin/sail artisan migrate --force
+./vendor/bin/sail npm ci
+./vendor/bin/sail npm run build
+docker compose up -d queue scheduler
+
+echo 'SmartSoft is ready. Local ports are configured in .env.'
+echo 'Create development accounts: ./vendor/bin/sail artisan db:seed --class=LocalDemoSeeder'

@@ -1,0 +1,75 @@
+name: smartsoft
+
+x-app: &app
+  image: smartsoft-dev:php85
+  build:
+    context: ./vendor/laravel/sail/runtimes/8.5
+    args:
+      WWWGROUP: '${WWWGROUP:-1000}'
+      NODE_VERSION: '24'
+  environment:
+    WWWUSER: '${WWWUSER:-1000}'
+    LARAVEL_SAIL: 1
+    XDEBUG_MODE: '${SAIL_XDEBUG_MODE:-off}'
+  volumes:
+    - '.:/var/www/html'
+  depends_on:
+    pgsql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  laravel.test:
+    <<: *app
+    ports:
+      - '127.0.0.1:${APP_PORT:-8095}:80'
+      - '127.0.0.1:${VITE_PORT:-5195}:5173'
+    healthcheck:
+      test: ['CMD', 'curl', '--fail', '--silent', 'http://localhost/up']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  queue:
+    <<: *app
+    command: ['php', 'artisan', 'queue:work', '--sleep=3', '--tries=3', '--timeout=60']
+    restart: unless-stopped
+
+  scheduler:
+    <<: *app
+    command: ['php', 'artisan', 'schedule:work']
+    restart: unless-stopped
+
+  pgsql:
+    image: postgres:18-alpine
+    ports:
+      - '127.0.0.1:${FORWARD_DB_PORT:-5448}:5432'
+    environment:
+      POSTGRES_DB: '${DB_DATABASE:-smartsoft}'
+      POSTGRES_USER: '${DB_USERNAME:-smartsoft}'
+      POSTGRES_PASSWORD: '${DB_PASSWORD:?Set DB_PASSWORD in .env}'
+    volumes:
+      - 'pgsql-data:/var/lib/postgresql'
+      - './docker/postgres/init-testing.sql:/docker-entrypoint-initdb.d/10-testing.sql:ro'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ['redis-server', '--appendonly', 'yes']
+    volumes:
+      - 'redis-data:/data'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgsql-data:
+  redis-data:

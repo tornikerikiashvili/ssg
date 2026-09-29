@@ -1,0 +1,7 @@
+.git
+.env
+.local-credentials
+node_modules
+vendor
+storage/logs
+artifacts
