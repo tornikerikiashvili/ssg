@@ -35,6 +35,10 @@ class ResourceItemResource extends Resource
 
     protected static string|UnitEnum|null $navigationGroup = 'Content';
 
+    protected static ?string $resourceKind = null;
+
+    protected static bool $standalone = false;
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
@@ -42,11 +46,17 @@ class ResourceItemResource extends Resource
             TextInput::make('slug')->required()->maxLength(255)->alphaDash()->unique(ignoreRecord: true),
             Textarea::make('description')->rows(5)->maxLength(20000)->columnSpanFull(),
 
-            Select::make('kind')->options(ResourceItem::KINDS)->required()->default('download')->live(),
-            Select::make('game_id')->hidden(fn ($livewire) => $livewire instanceof RelationManager)->dehydrated(fn ($livewire) => ! ($livewire instanceof RelationManager))->relationship('game', 'title')->searchable()->preload()->helperText('Linked resources also inherit the game’s visibility.'),
-            Select::make('catalog_option_id')->label('Asset category / document type')->options(fn ($get) => CatalogOption::options($get('kind') === 'documentation' ? 'document' : 'asset'))
-                ->rules(fn ($get) => [Rule::exists('catalog_options', 'id')->where('kind', $get('kind') === 'documentation' ? 'document' : 'asset')])->searchable(),
-            FileUpload::make('file_path')->label('File')->disk('local')->directory('game-assets')->visibility('private')->maxSize(12288)
+            Select::make('kind')->label('Resource type')->options(static::getKindOptions())->required()->default(static::$resourceKind ?? 'download')->live(),
+            ...(static::$standalone ? [] : [
+                Select::make('game_id')->hidden(fn ($livewire) => $livewire instanceof RelationManager)->dehydrated(fn ($livewire) => ! ($livewire instanceof RelationManager))->relationship('game', 'title')->searchable()->preload()->helperText('Linked resources also inherit the game’s visibility.'),
+                Select::make('catalog_option_id')->label('Asset category / document type')->options(fn ($get) => CatalogOption::options($get('kind') === 'documentation' ? 'document' : 'asset'))
+                    ->rules(fn ($get) => [Rule::exists('catalog_options', 'id')->where('kind', $get('kind') === 'documentation' ? 'document' : 'asset')])->searchable(),
+            ]),
+            ...(static::$standalone && static::$resourceKind === 'documentation' ? [
+                Select::make('catalog_option_id')->label('Documentation category')->options(fn () => CatalogOption::options('document'))
+                    ->required()->searchable()->rules([Rule::exists('catalog_options', 'id')->where('kind', 'document')]),
+            ] : []),
+            FileUpload::make('file_path')->label('File')->disk('local')->directory(static::$standalone ? 'portal-resources' : 'game-assets')->visibility('private')->maxSize(12288)
                 ->preventFilePathTampering()->helperText('Private local storage, up to 12 MB per file. Existing demo files remain available; uploading replaces the file association.'),
 
             Select::make('company_id')->relationship('company', 'name')->searchable()->preload()->label('Audience company')->placeholder('All partner companies')->helperText('Leave empty to share with all active partner companies.'),
@@ -59,15 +69,17 @@ class ResourceItemResource extends Resource
     {
         return $table->columns([
             TextColumn::make('title')->searchable()->sortable()->limit(45),
-            TextColumn::make('kind')->badge(), TextColumn::make('game.title')->placeholder('General'),
+            TextColumn::make('kind')->badge(), TextColumn::make('game.title')->placeholder('General')->hidden(static::$standalone),
             TextColumn::make('company.name')->label('Audience')->placeholder('All partners'),
+            TextColumn::make('catalogOption.name')->label('Documentation category')->visible(static::$resourceKind === 'documentation'),
             IconColumn::make('is_published')->label('Published')->boolean(),
             IconColumn::make('is_demo')->label('Demo')->boolean(),
             TextColumn::make('updated_at')->since()->sortable(),
         ])->filters([
             TernaryFilter::make('is_published'),
             SelectFilter::make('company_id')->relationship('company', 'name')->label('Company'),
-            SelectFilter::make('kind')->options(ResourceItem::KINDS),
+            SelectFilter::make('kind')->options(static::getKindOptions()),
+            SelectFilter::make('catalog_option_id')->label('Documentation category')->options(fn () => CatalogOption::options('document'))->visible(static::$resourceKind === 'documentation'),
         ])->recordActions([EditAction::make(), DeleteAction::make()])
             ->defaultSort('updated_at', 'desc');
     }
@@ -75,5 +87,13 @@ class ResourceItemResource extends Resource
     public static function getPages(): array
     {
         return ['index' => ManageResourceItems::route('/')];
+    }
+
+    /** @return array<string, string> */
+    protected static function getKindOptions(): array
+    {
+        return static::$resourceKind === null
+            ? array_diff_key(ResourceItem::KINDS, ['license' => true])
+            : [static::$resourceKind => ResourceItem::KINDS[static::$resourceKind]];
     }
 }

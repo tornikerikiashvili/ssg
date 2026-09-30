@@ -50,7 +50,7 @@ class ClientPortalController extends Controller
             'recentGames' => (clone $games)->latest()->orderByDesc('id')->limit(5)->get(),
             'featuredGames' => (clone $games)->where('is_featured', true)->latest()->orderByDesc('id')->limit(6)->get(),
             'featuredGame' => (clone $games)->where('is_featured', true)->latest()->orderByDesc('id')->first(),
-            'announcements' => Announcement::visibleTo($user)->latest()->orderByDesc('id')->limit(4)->get(),
+            'announcements' => Announcement::visibleTo($user)->where('show_on_dashboard', true)->latest()->orderByDesc('id')->limit(4)->get(),
             'newResources' => ResourceItem::visibleTo($user)->latest()->orderByDesc('id')->limit(4)->get(),
             'gameCount' => (clone $games)->count(),
             'newGameCount' => (clone $games)->where('created_at', '>=', $since)->count(),
@@ -93,7 +93,7 @@ class ClientPortalController extends Controller
 
     public function game(Request $request, string $slug): View
     {
-        $game = Game::visibleTo($request->user())->where('slug', $slug)->firstOrFail();
+        $game = Game::visibleTo($request->user())->with('regionAvailabilities.region')->where('slug', $slug)->firstOrFail();
         $resources = $game->resources()->visibleTo($request->user())->whereIn('kind', ['download', 'certificate'])
             ->orderBy('title')->orderBy('id')->with('catalogOption')->get();
         $documents = $game->resources()->visibleTo($request->user())->where('kind', 'documentation')->with('catalogOption')->get();
@@ -106,8 +106,14 @@ class ClientPortalController extends Controller
 
     public function resources(Request $request, string $kind): View
     {
-        abort_unless(array_key_exists($kind, ResourceItem::KINDS), 404);
+        abort_unless(in_array($kind, ['download', 'documentation', 'certificate'], true), 404);
         $rules = ['q' => ['nullable', 'string', 'max:100']];
+        if ($kind === 'documentation') {
+            $rules += [
+                'documentation_category_id' => ['nullable', 'integer', Rule::exists('catalog_options', 'id')->where('kind', 'document')],
+                'sort' => ['nullable', Rule::in(['name', 'newest'])],
+            ];
+        }
         if ($kind === 'download') {
             $rules += [
                 'category' => ['nullable', 'string', Rule::exists('catalog_options', 'name')->where('kind', 'category')],
@@ -118,8 +124,13 @@ class ClientPortalController extends Controller
             ];
         }
         $filters = $request->validate($rules);
-        $query = ResourceItem::visibleTo($request->user())->with('game')->where('kind', $kind)
+        $query = ResourceItem::visibleTo($request->user())->with(['game', 'catalogOption'])->where('kind', $kind)
+            ->when(in_array($kind, ['certificate', 'documentation'], true), fn ($query) => $query->whereNull('game_id'))
             ->when($filters['q'] ?? null, fn ($query, $q) => $query->where('title', 'ilike', '%'.$q.'%'));
+        if ($kind === 'documentation') {
+            $query->when($filters['documentation_category_id'] ?? null, fn ($query, $category) => $query->where('catalog_option_id', $category))
+                ->when(($filters['sort'] ?? 'name') === 'newest', fn ($query) => $query->latest()->orderByDesc('id'));
+        }
         if ($kind === 'download') {
             $query->when($filters['category'] ?? null, fn ($query, $category) => $query->whereHas('game.categoryTerm', fn ($term) => $term->where('name', $category)));
             foreach (['game_type_id', 'payout_type_id', 'volatility_id'] as $field) {
@@ -136,9 +147,14 @@ class ClientPortalController extends Controller
             }
         }
         $resources = $query->orderBy('title')->orderBy('id')->paginate(12)->withQueryString();
+        $licenses = $kind === 'certificate'
+            ? ResourceItem::visibleTo($request->user())->where('kind', 'license')->whereNull('game_id')
+                ->when($filters['q'] ?? null, fn ($query, $q) => $query->where('title', 'ilike', '%'.$q.'%'))
+                ->orderBy('title')->orderBy('id')->paginate(12, ['*'], 'licenses_page')->withQueryString()
+            : null;
         $title = ['download' => 'Download Center', 'documentation' => 'Documentation', 'certificate' => 'Licenses & Certificates'][$kind];
 
-        return view('client.resources', ['recentDownloads' => ResourceDownload::recentFor($request->user()), 'assetCategories' => CatalogOption::options('asset'), 'catalogOptions' => CatalogOption::orderBy('sort_order')->orderBy('name')->get()->groupBy('kind')] + compact('resources', 'title', 'kind'));
+        return view('client.resources', ['recentDownloads' => ResourceDownload::recentFor($request->user()), 'assetCategories' => CatalogOption::options('asset'), 'catalogOptions' => CatalogOption::orderBy('sort_order')->orderBy('name')->get()->groupBy('kind')] + compact('resources', 'licenses', 'title', 'kind'));
     }
 
     public function resource(Request $request, int $resourceItem): View
@@ -226,7 +242,16 @@ class ClientPortalController extends Controller
 
     public function roadmap(Request $request): View
     {
-        return view('client.roadmap', ['items' => RoadmapItem::visibleTo($request->user())->orderBy('target_date')->paginate(12)]);
+        $user = $request->user();
+        $items = RoadmapItem::visibleTo($user)->with(['game', 'region'])->orderByRaw('target_date ASC NULLS LAST')->orderBy('id')->paginate(12);
+        $upcomingItems = RoadmapItem::visibleTo($user)->where('status', '!=', 'released')->with('game')->orderByRaw('target_date ASC NULLS LAST')->orderBy('id')->limit(2)->get();
+        $regionalItems = RoadmapItem::visibleTo($user)->whereNotNull('region_id')->with(['game', 'region'])->orderByRaw('target_date ASC NULLS LAST')->get()->groupBy('region_id');
+        $openableGameIds = Game::visibleTo($user)->whereHas('roadmapItems', fn ($query) => $query->visibleTo($user))->pluck('id');
+        $regionalGames = Game::roadmapVisibleTo($user)->whereHas('roadmapItems', fn ($query) => $query->visibleTo($user))
+            ->with(['regionAvailabilities' => fn ($query) => $query->when(! $user->is_admin, fn ($query) => $query->whereIn('region_id', $user->accessibleRegionIds()))->with('region')])->orderBy('title')->get();
+        $announcements = Announcement::visibleTo($user)->where('show_on_roadmap', true)->latest()->limit(6)->get();
+
+        return view('client.roadmap', compact('items', 'openableGameIds', 'regionalGames', 'announcements', 'upcomingItems', 'regionalItems'));
     }
 
     public function tools(Request $request): View

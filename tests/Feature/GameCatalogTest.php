@@ -2,13 +2,17 @@
 
 namespace Tests\Feature;
 
-use App\Filament\Resources\CatalogOptions\Pages\ManageCatalogOptions;
+use App\Filament\Resources\GameCategories\Pages\ManageGameCategories;
 use App\Filament\Resources\Games\Pages\EditGame;
 use App\Filament\Resources\Games\RelationManagers\ResourcesRelationManager;
+use App\Filament\Resources\GameTypes\Pages\ManageGameTypes;
+use App\Filament\Resources\PayoutTypes\Pages\ManagePayoutTypes;
+use App\Filament\Resources\VolatilityLevels\Pages\ManageVolatilityLevels;
 use App\Models\CatalogOption;
 use App\Models\Company;
 use App\Models\EngagementTool;
 use App\Models\Game;
+use App\Models\Region;
 use App\Models\ResourceItem;
 use App\Models\User;
 use Filament\Actions\Testing\TestAction;
@@ -18,6 +22,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Livewire\Livewire;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 use ZipArchive;
@@ -48,28 +53,69 @@ class GameCatalogTest extends TestCase
     public function test_admin_can_create_and_rename_categories_without_losing_game_assignments(): void
     {
         $this->actingAs(User::factory()->create(['is_admin' => true]));
-        Livewire::test(ManageCatalogOptions::class)->callAction('create', data: ['kind' => 'category', 'name' => 'Puzzle', 'sort_order' => 2])->assertHasNoActionErrors();
+        Livewire::test(ManageGameCategories::class)->callAction('create', data: ['name' => 'Puzzle', 'sort_order' => 2])->assertHasNoActionErrors();
         $category = CatalogOption::where('name', 'Puzzle')->firstOrFail();
+        $this->assertSame('category', $category->kind);
         $game = Game::factory()->create(['category_id' => $category->id]);
-        $category->update(['name' => 'Puzzles']);
+        $asset = ResourceItem::factory()->for($game)->create(['kind' => 'download']);
+        Livewire::test(ManageGameCategories::class)->callAction(TestAction::make('edit')->table($category), data: ['name' => 'Puzzles'])->assertHasNoActionErrors();
         $this->assertSame('Puzzles', $game->fresh()->category);
+        $this->get('/admin/game-categories')->assertOk()->assertSee('Taxonomy')->assertDontSee('Categories &amp; filter options', false);
+        $this->get('/admin/catalog-options')->assertNotFound();
         $this->actingAs($this->partner())->get('/games?category=Puzzles')->assertOk()->assertSee($game->title);
-        $this->get('/admin/catalog-options')->assertForbidden();
+        $this->get('/resources/download?category=Puzzles')->assertOk()->assertSee($game->title)
+            ->assertViewHas('resources', fn ($resources) => $resources->modelKeys() === [$asset->id]);
+        $this->get('/admin/game-categories')->assertForbidden();
+    }
+
+    /** @return array<string, array{class-string, string, string}> */
+    public static function gameFilterTaxonomies(): array
+    {
+        return [
+            'game types' => [ManageGameTypes::class, 'game_type', 'game_type_id'],
+            'payout types' => [ManagePayoutTypes::class, 'payout_type', 'payout_type_id'],
+            'volatility levels' => [ManageVolatilityLevels::class, 'volatility', 'volatility_id'],
+        ];
+    }
+
+    #[DataProvider('gameFilterTaxonomies')]
+    public function test_cms_filter_options_update_games_and_download_center(string $page, string $kind, string $field): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Livewire::test($page)->callAction('create', data: ['name' => 'Custom option', 'sort_order' => 1])->assertHasNoActionErrors();
+        $option = CatalogOption::where('kind', $kind)->where('name', 'Custom option')->firstOrFail();
+        $unrelated = CatalogOption::factory()->create(['kind' => 'document']);
+        $game = Game::factory()->create();
+        Livewire::test(EditGame::class, ['record' => $game->id])->fillForm([$field => $option->id])->call('save')->assertHasNoFormErrors();
+        $asset = ResourceItem::factory()->for($game)->create(['kind' => 'download']);
+        Game::factory()->create(['title' => 'Nonmatching game']);
+        Livewire::test($page)->assertCanSeeTableRecords([$option])->assertCanNotSeeTableRecords([$unrelated])
+            ->callAction(TestAction::make('edit')->table($option), data: ['name' => 'Renamed option'])->assertHasNoActionErrors();
+        $this->assertSame($option->id, $game->fresh()->getAttribute($field));
+        Livewire::test($page)->callAction('create', data: ['name' => 'Wrong taxonomy', 'sort_order' => 0, 'kind' => 'document'])->assertHasActionErrors(['kind']);
+
+        $this->actingAs($this->partner())->get('/games?'.http_build_query([$field => $option->id]))->assertOk()
+            ->assertSee('Renamed option')->assertViewHas('games', fn ($games) => $games->modelKeys() === [$game->id]);
+        $this->get('/resources/download?'.http_build_query([$field => $option->id]))->assertOk()
+            ->assertSee('Renamed option')->assertViewHas('resources', fn ($resources) => $resources->modelKeys() === [$asset->id]);
     }
 
     public function test_full_game_editor_persists_sections_and_rejects_wrong_option_types(): void
     {
         $game = Game::factory()->create();
+        $region = Region::factory()->create(['name' => 'Georgia']);
         $type = CatalogOption::factory()->create(['kind' => 'game_type']);
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $this->get('/admin/games/'.$game->id.'/edit')->assertOk();
         Livewire::test(EditGame::class, ['record' => $game->id])->fillForm([
             'features' => 'Game features from CMS', 'feature_tags' => ['Multiplayer'], 'rules' => 'Game rules from CMS',
-            'specifications' => ['Languages' => '22'], 'regions' => [['country' => 'Georgia', 'status' => 'available']], 'game_type_id' => $type->id,
+            'specifications' => ['Languages' => '22'], 'regionAvailabilities' => [['region_id' => $region->id, 'status' => 'available']], 'game_type_id' => $type->id,
         ])->call('save')->assertHasNoFormErrors();
         $this->assertSame('Game features from CMS', $game->fresh()->features);
         Livewire::test(EditGame::class, ['record' => $game->id])->fillForm(['category_id' => $type->id])->call('save')->assertHasFormErrors(['category_id']);
-        $this->actingAs($this->partner())->get('/games/'.$game->slug)->assertOk()->assertSee('Game features from CMS')->assertSee('Game rules from CMS')->assertSee('Georgia');
+        $partner = $this->partner();
+        $partner->company->regions()->attach($region);
+        $this->actingAs($partner)->get('/games/'.$game->slug)->assertOk()->assertSee('Game features from CMS')->assertSee('Game rules from CMS')->assertSee('Georgia');
         $this->get('/admin/games/'.$game->id.'/edit')->assertForbidden();
     }
 
@@ -127,21 +173,60 @@ class GameCatalogTest extends TestCase
         $this->get('/resources/download?category=Puzzle&q=nonexistent')->assertOk()->assertSee('No downloads match your filters.');
     }
 
-    public function test_asset_manager_saves_uploaded_files_on_the_owner_game(): void
+    public function test_documentation_manager_updates_uploaded_files_on_the_owner_game(): void
     {
         Storage::fake('local');
         $game = Game::factory()->create();
-        $category = CatalogOption::factory()->create(['kind' => 'asset']);
+        $category = CatalogOption::factory()->create(['kind' => 'document']);
+        $document = ResourceItem::factory()->for($game)->create(['kind' => 'documentation']);
         $this->actingAs(User::factory()->create(['is_admin' => true]));
-        Livewire::test(ResourcesRelationManager::class, ['ownerRecord' => $game, 'pageClass' => EditGame::class])->callAction(TestAction::make('create')->table(), data: [
-            'title' => 'Uploaded asset', 'slug' => 'uploaded-asset', 'kind' => 'download', 'catalog_option_id' => $category->id,
+        Livewire::test(ResourcesRelationManager::class, ['ownerRecord' => $game, 'pageClass' => EditGame::class])->callAction(TestAction::make('edit')->table($document), data: [
+            'title' => 'Uploaded guide', 'slug' => 'uploaded-guide', 'kind' => 'documentation', 'catalog_option_id' => $category->id,
             'is_published' => true, 'file_path' => UploadedFile::fake()->create('guide.pdf', 10, 'application/pdf'),
         ])->assertHasNoActionErrors();
-        $resource = ResourceItem::where('slug', 'uploaded-asset')->firstOrFail();
+        $resource = ResourceItem::where('slug', 'uploaded-guide')->firstOrFail();
         $this->assertSame($game->id, $resource->game_id);
         $this->assertTrue($resource->hasDownloadableFile());
         Storage::disk('local')->assertExists($resource->file_path);
         $this->actingAs($this->partner())->get('/resource/'.$resource->id.'/download')->assertOk();
+    }
+
+    public function test_game_documentation_can_be_assigned_and_removed_without_deleting_files(): void
+    {
+        $game = Game::factory()->create();
+        $document = ResourceItem::factory()->create(['kind' => 'documentation', 'game_id' => null]);
+        $asset = ResourceItem::factory()->for($game)->create(['kind' => 'download']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+
+        Livewire::test(ResourcesRelationManager::class, ['ownerRecord' => $game, 'pageClass' => EditGame::class])
+            ->assertActionDoesNotExist(TestAction::make('create')->table())
+            ->callAction(TestAction::make('associate')->table(), data: ['recordId' => $document->id])
+            ->assertHasNoActionErrors()
+            ->assertCanSeeTableRecords([$document])
+            ->assertCanNotSeeTableRecords([$asset]);
+        $this->assertSame($game->id, $document->fresh()->game_id);
+
+        Livewire::test(ResourcesRelationManager::class, ['ownerRecord' => $game, 'pageClass' => EditGame::class])
+            ->callAction(TestAction::make('dissociate')->table($document))
+            ->assertHasNoActionErrors();
+        $this->assertNull($document->fresh()->game_id);
+        $this->assertSame($document->file_path, $document->fresh()->file_path);
+        $this->assertSame($game->id, $asset->fresh()->game_id);
+    }
+
+    public function test_game_documentation_rejects_assets_and_documents_owned_by_another_game(): void
+    {
+        $game = Game::factory()->create();
+        $asset = ResourceItem::factory()->create(['kind' => 'download', 'game_id' => null]);
+        $otherDocument = ResourceItem::factory()->for(Game::factory())->create(['kind' => 'documentation']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+
+        foreach ([$asset, $otherDocument] as $resource) {
+            Livewire::test(ResourcesRelationManager::class, ['ownerRecord' => $game, 'pageClass' => EditGame::class])
+                ->callAction(TestAction::make('associate')->table(), data: ['recordId' => $resource->id])
+                ->assertHasActionErrors(['recordId']);
+            $this->assertSame($resource->game_id, $resource->fresh()->game_id);
+        }
     }
 
     public function test_game_assets_documents_and_tools_follow_assignments_and_access(): void

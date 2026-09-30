@@ -9,46 +9,28 @@
             <p>Step-by-step backend and frontend integration walkthrough.</p>
           </div>
         </div>
-        <div class="games_filter-wrapper w-form">
-          <form id="wf-form-Games-Filter" name="wf-form-Games-Filter" data-name="Games Filter" method="get" fs-cmsfilter-element="filters" class="games_filter-form" data-wf-page-id="6a99de8fb0fde4ff7a38c306" data-wf-element-id="40f335b5-0bdf-9857-5bdd-34888bff3a77">
-            <div no-scrollbar="" class="filter_buttons"><label data-filter-all="" class="filter_button w-radio">
-                <div class="w-form-formradioinput w-form-formradioinput--inputType-custom filter_radio w-radio-input w--redirected-checked"></div><input type="radio" name="Categories" id="All" data-name="Categories" style="opacity:0;position:absolute;z-index:-1" checked="" value="All"><span fs-cmsfilter-element="clear" class="filter_button-label w-form-label" for="All">All</span>
-              </label><label data-filter-all="" class="filter_button w-radio">
-                <div class="w-form-formradioinput w-form-formradioinput--inputType-custom filter_radio w-radio-input"></div><input type="radio" name="Categories" id="Guide" data-name="Categories" style="opacity:0;position:absolute;z-index:-1" value="Guide"><span fs-cmsfilter-element="clear" class="filter_button-label w-form-label" for="Guide">Guide</span>
-              </label><label data-filter-all="" class="filter_button w-radio">
-                <div class="w-form-formradioinput w-form-formradioinput--inputType-custom filter_radio w-radio-input"></div><input type="radio" name="Categories" id="API" data-name="Categories" style="opacity:0;position:absolute;z-index:-1" value="API"><span fs-cmsfilter-element="clear" class="filter_button-label w-form-label" for="API">API</span>
-              </label><label data-filter-all="" class="filter_button w-radio">
-                <div class="w-form-formradioinput w-form-formradioinput--inputType-custom filter_radio w-radio-input"></div><input type="radio" name="Categories" id="Manual" data-name="Categories" style="opacity:0;position:absolute;z-index:-1" value="Manual"><span fs-cmsfilter-element="clear" class="filter_button-label w-form-label" for="Manual">Manual</span>
-              </label><label data-filter-all="" class="filter_button w-radio">
-                <div class="w-form-formradioinput w-form-formradioinput--inputType-custom filter_radio w-radio-input"></div><input type="radio" name="Categories" id="Rules" data-name="Categories" style="opacity:0;position:absolute;z-index:-1" value="Rules"><span fs-cmsfilter-element="clear" class="filter_button-label w-form-label" for="Rules">Rules</span>
-              </label></div>
-            <div class="filter_select-wrapper is-sort">
-              <div class="select-overlay"></div>
-              <div class="filter_select">
-                <div aria-expanded="false" data-accordion-trigger="" class="filter_select-trigger">
-                  <div class="world_item-trigger-inner">
-                    <p>Sort by</p>
-                  </div><img src="{{ asset('client-design/images/arrow-down.svg') }}" loading="lazy" width="25" height="25" alt="Icon" class="select-arrow">
-                </div>
-                <div data-accordion-content="" class="filter_select-content">
-                  <div data-accordion-content-inner="" class="filter_select-content-inner"><label class="filter_select-checkbox-item w-radio">
-                      <div class="w-form-formradioinput w-form-formradioinput--inputType-custom filter_select-checkbox w-radio-input"></div><input type="radio" name="Sort" id="Date" data-name="Sort" style="opacity:0;position:absolute;z-index:-1" value="Date"><span class="filter_select-checkbox-label w-form-label" for="Date">Date</span>
-                    </label><label class="filter_select-checkbox-item w-radio">
-                      <div class="w-form-formradioinput w-form-formradioinput--inputType-custom filter_select-checkbox w-radio-input"></div><input type="radio" name="Sort" id="Date" data-name="Sort" style="opacity:0;position:absolute;z-index:-1" value="Date"><span class="filter_select-checkbox-label w-form-label" for="Date">Name</span>
-                    </label></div>
-                </div>
-              </div>
+        <div class="games_filter-wrapper">
+          <form id="documentation-filter" method="get" action="{{ route('resources.index', 'documentation') }}" class="games_filter-form">
+            <input type="hidden" name="q" value="{{ request('q') }}">
+            <div no-scrollbar class="filter_buttons">
+              @foreach(['' => 'All'] + $catalogOptions->get('document', collect())->pluck('name', 'id')->all() as $value => $label)
+              <label class="filter_button w-radio">
+                <input type="radio" name="documentation_category_id" value="{{ $value }}" @checked((string) request('documentation_category_id', '') === (string) $value) style="opacity:0;position:absolute;z-index:-1">
+                <span class="filter_button-label w-form-label">{{ $label }}</span>
+              </label>
+              @endforeach
             </div>
+            <label>Sort by
+              <select name="sort" class="form_input">
+                <option value="name" @selected(request('sort', 'name') === 'name')>Name</option>
+                <option value="newest" @selected(request('sort') === 'newest')>Newest</option>
+              </select>
+            </label>
+            <button type="submit" class="card-button">Apply filters</button>
           </form>
-          <div class="w-form-done">
-            <div>Thank you! Your submission has been received!</div>
-          </div>
-          <div class="w-form-fail">
-            <div>Oops! Something went wrong while submitting the form.</div>
-          </div>
         </div>
         <div class="assets_list">@forelse($resources as $resource)<a href="{{ route('resources.show', $resource->id) }}" class="docs_item w-inline-block">
-            <p class="tag">{{ $resource->is_demo ? 'Demo' : 'Document' }}</p>
+            <p class="tag">{{ $resource->catalogOption?->name ?? 'Document' }}{{ $resource->is_demo ? ' · Demo' : '' }}</p>
             <div class="wrapper-vertical-xs">
               <p class="text-weight-semibold">{{ $resource->title }}</p>
               <p class="text-size-small">{{ $resource->description }}</p>
@@ -259,3 +241,11 @@
         </div>
       </main>
 @endsection
+
+@push('scripts')
+<script>
+    document.querySelectorAll('#documentation-filter input[type="radio"], #documentation-filter select').forEach(input => {
+        input.addEventListener('change', () => input.form.requestSubmit());
+    });
+</script>
+@endpush

@@ -38,6 +38,8 @@ class AnnouncementResource extends Resource
             TextInput::make('slug')->required()->maxLength(255)->alphaDash()->unique(ignoreRecord: true),
             Textarea::make('description')->rows(5)->maxLength(20000)->columnSpanFull(),
 
+            Toggle::make('show_on_dashboard')->label('Show on Dashboard')->default(true),
+            Toggle::make('show_on_roadmap')->label('Show on Roadmap')->default(false),
             Select::make('priority')->options(['info' => 'Information', 'important' => 'Important'])->required()->default('info'),
 
             Select::make('company_id')->relationship('company', 'name')->searchable()->preload()->label('Audience company')->placeholder('All partner companies')->helperText('Leave empty to share with all active partner companies.'),

@@ -3,11 +3,15 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\Announcements\Pages\ManageAnnouncements;
+use App\Filament\Resources\Certificates\Pages\ManageCertificates;
 use App\Filament\Resources\Companies\Pages\ManageCompanies;
+use App\Filament\Resources\DocumentationCategories\Pages\ManageDocumentationCategories;
+use App\Filament\Resources\Documentations\Pages\ManageDocumentations;
 use App\Filament\Resources\EngagementTools\Pages\ManageEngagementTools;
 use App\Filament\Resources\Games\Pages\CreateGame;
 use App\Filament\Resources\Games\Pages\EditGame;
 use App\Filament\Resources\Games\Pages\ManageGames;
+use App\Filament\Resources\Licenses\Pages\ManageLicenses;
 use App\Filament\Resources\ResourceItems\Pages\ManageResourceItems;
 use App\Filament\Resources\RoadmapItems\Pages\ManageRoadmapItems;
 use App\Filament\Resources\Users\Pages\ManageUsers;
@@ -21,6 +25,7 @@ use Database\Seeders\PortalDemoSeeder;
 use Filament\Actions\Testing\TestAction;
 use Filament\Facades\Filament;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
@@ -191,7 +196,7 @@ class PortalContentTest extends TestCase
     public static function adminModules(): array
     {
         return array_map(fn (string $path): array => [$path], [
-            'companies', 'users', 'games', 'resource-items', 'announcements', 'roadmap-items', 'engagement-tools',
+            'companies', 'users', 'games', 'game-categories', 'game-types', 'payout-types', 'volatility-levels', 'resource-items', 'certificates', 'licenses', 'documentations', 'documentation-categories', 'announcements', 'roadmap-items', 'engagement-tools',
         ]);
     }
 
@@ -229,6 +234,126 @@ class PortalContentTest extends TestCase
             Livewire::test($page)->callAction('create', data: $data)->assertHasNoActionErrors();
         }
         $this->assertDatabaseHas($table, ['slug' => 'created-in-cms', 'is_published' => true]);
+    }
+
+    /** @return array<string, array{class-string, string}> */
+    public static function standaloneResourceForms(): array
+    {
+        return [
+            'licenses' => [ManageLicenses::class, 'license'],
+            'certifications' => [ManageCertificates::class, 'certificate'],
+        ];
+    }
+
+    #[DataProvider('standaloneResourceForms')]
+    public function test_standalone_cms_uploads_files_for_the_client_area(string $page, string $kind): void
+    {
+        Storage::fake('local');
+        $client = $this->client();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+
+        Livewire::test($page)->callAction('create', data: [
+            'title' => 'Gaming license', 'slug' => 'gaming-license',
+            'company_id' => $client->company_id, 'is_published' => true,
+            'file_path' => UploadedFile::fake()->create('license.pdf', 10, 'application/pdf'),
+        ])->assertHasNoActionErrors();
+
+        $certificate = ResourceItem::where('slug', 'gaming-license')->firstOrFail();
+        $this->assertSame($kind, $certificate->kind);
+        $this->assertNull($certificate->game_id);
+        $this->assertNull($certificate->catalog_option_id);
+        $this->assertStringStartsWith('portal-resources/', $certificate->file_path);
+        $this->assertTrue($certificate->hasDownloadableFile());
+        Storage::disk('local')->assertExists($certificate->file_path);
+        $this->actingAs($client)->get('/resources/certificate')->assertOk()->assertSee('Gaming license');
+        $this->get(route('resources.download', $certificate))->assertOk()->assertDownload();
+        $this->actingAs($this->client())->get(route('resources.download', $certificate))->assertNotFound();
+    }
+
+    public function test_certificate_cms_only_manages_certificates(): void
+    {
+        $certificate = ResourceItem::factory()->create(['kind' => 'certificate']);
+        $download = ResourceItem::factory()->create(['kind' => 'download']);
+        $gameCertificate = ResourceItem::factory()->for(Game::factory())->create(['kind' => 'certificate']);
+        $license = ResourceItem::factory()->create(['kind' => 'license']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+
+        Livewire::test(ManageCertificates::class)
+            ->assertCanSeeTableRecords([$certificate])->assertCanNotSeeTableRecords([$download, $gameCertificate, $license])
+            ->callAction('create', data: ['title' => 'Wrong kind', 'slug' => 'wrong-kind', 'kind' => 'download'])
+            ->assertHasActionErrors(['kind']);
+        $this->assertDatabaseMissing('resource_items', ['slug' => 'wrong-kind']);
+        $this->actingAs($this->client())->get('/resources/certificate')->assertOk()
+            ->assertSee($certificate->title)->assertDontSee($gameCertificate->title);
+    }
+
+    public function test_license_cms_and_main_page_keep_licenses_separate(): void
+    {
+        $license = ResourceItem::factory()->create(['kind' => 'license', 'title' => 'Partner License']);
+        $certificate = ResourceItem::factory()->create(['kind' => 'certificate', 'title' => 'Partner Certification']);
+        $draft = ResourceItem::factory()->create(['kind' => 'license', 'is_published' => false]);
+        $private = ResourceItem::factory()->for(Company::factory())->create(['kind' => 'license']);
+        $gameLicense = ResourceItem::factory()->for(Game::factory())->create(['kind' => 'license']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Livewire::test(ManageLicenses::class)
+            ->assertCanSeeTableRecords([$license])->assertCanNotSeeTableRecords([$certificate, $gameLicense])
+            ->callAction('create', data: ['title' => 'Wrong kind', 'slug' => 'wrong-kind', 'kind' => 'certificate'])
+            ->assertHasActionErrors(['kind']);
+
+        $this->actingAs($this->client())->get('/resources/certificate')->assertOk()
+            ->assertViewHas('licenses', fn ($licenses) => $licenses->modelKeys() === [$license->id])
+            ->assertViewHas('resources', fn ($resources) => $resources->modelKeys() === [$certificate->id])
+            ->assertSeeInOrder(['Licenses</p>', $license->title, 'Certifications</p>', $certificate->title], false)
+            ->assertDontSee($draft->title)->assertDontSee($private->title)->assertDontSee($gameLicense->title);
+        $this->get('/resources/certificate?q=Certification')->assertOk()
+            ->assertViewHas('licenses', fn ($licenses) => $licenses->isEmpty())
+            ->assertViewHas('resources', fn ($resources) => $resources->modelKeys() === [$certificate->id]);
+    }
+
+    public function test_documentation_categories_and_uploads_work_in_the_cms_and_main_page(): void
+    {
+        Storage::fake('local');
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Livewire::test(ManageDocumentationCategories::class)->callAction('create', data: [
+            'name' => 'Integration guides', 'sort_order' => 1,
+        ])->assertHasNoActionErrors();
+        $category = CatalogOption::where('name', 'Integration guides')->firstOrFail();
+        $this->assertSame('document', $category->kind);
+        $assetCategory = CatalogOption::factory()->create(['kind' => 'asset']);
+        Livewire::test(ManageDocumentationCategories::class)
+            ->assertCanSeeTableRecords([$category])->assertCanNotSeeTableRecords([$assetCategory]);
+        Livewire::test(ManageDocumentations::class)->callAction('create', data: [
+            'title' => 'Platform setup', 'slug' => 'platform-setup', 'catalog_option_id' => $category->id,
+            'is_published' => true, 'file_path' => UploadedFile::fake()->create('setup.pdf', 10, 'application/pdf'),
+        ])->assertHasNoActionErrors();
+        $document = ResourceItem::where('slug', 'platform-setup')->firstOrFail();
+        $this->assertSame('documentation', $document->kind);
+        $this->assertNull($document->game_id);
+        Storage::disk('local')->assertExists($document->file_path);
+        $other = ResourceItem::factory()->create(['kind' => 'documentation']);
+        $gameDocument = ResourceItem::factory()->for(Game::factory())->create(['kind' => 'documentation', 'catalog_option_id' => $category->id]);
+        $private = ResourceItem::factory()->for(Company::factory())->create(['kind' => 'documentation', 'catalog_option_id' => $category->id]);
+        $draft = ResourceItem::factory()->create(['kind' => 'documentation', 'catalog_option_id' => $category->id, 'is_published' => false]);
+        Livewire::test(ManageDocumentations::class)->assertCanSeeTableRecords([$document])->assertCanNotSeeTableRecords([$gameDocument]);
+        $this->actingAs($this->client())->get('/resources/documentation?documentation_category_id='.$category->id.'&q=setup')
+            ->assertOk()->assertSee($category->name)->assertSee($document->title)
+            ->assertViewHas('resources', fn ($resources) => $resources->modelKeys() === [$document->id])
+            ->assertDontSee($other->title)->assertDontSee($gameDocument->title)->assertDontSee($private->title)->assertDontSee($draft->title);
+        $this->get(route('resources.download', $document))->assertOk()->assertDownload();
+        $this->getJson('/resources/documentation?documentation_category_id='.$assetCategory->id)
+            ->assertUnprocessable()->assertJsonValidationErrors('documentation_category_id');
+    }
+
+    public function test_documentation_cms_requires_a_documentation_category(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $assetCategory = CatalogOption::factory()->create(['kind' => 'asset']);
+        foreach ([null, $assetCategory->id] as $categoryId) {
+            Livewire::test(ManageDocumentations::class)->callAction('create', data: [
+                'title' => 'Invalid category', 'slug' => 'invalid-category', 'catalog_option_id' => $categoryId,
+            ])->assertHasActionErrors(['catalog_option_id']);
+        }
+        $this->assertDatabaseMissing('resource_items', ['slug' => 'invalid-category']);
     }
 
     public function test_cms_edit_changes_what_the_client_sees(): void

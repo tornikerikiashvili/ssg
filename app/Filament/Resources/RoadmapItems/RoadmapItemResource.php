@@ -35,12 +35,17 @@ class RoadmapItemResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('title')->required()->maxLength(255),
+            Select::make('game_id')->relationship('game', 'title')->searchable()->preload()->label('Linked game')->helperText('Select the existing Games record. Leave empty only for general plans.'),
+            Select::make('milestone_type')->options(RoadmapItem::TYPES)->required()->default('initial_release'),
+            Select::make('region_id')->relationship('region', 'name')->searchable()->preload()->label('Launch region')->helperText('Use for regional milestones; visibility is restricted to this region.'),
+            TextInput::make('title')->label('Milestone title')->required()->maxLength(255),
             TextInput::make('slug')->required()->maxLength(255)->alphaDash()->unique(ignoreRecord: true),
             Textarea::make('description')->rows(5)->maxLength(20000)->columnSpanFull(),
 
             Select::make('status')->options(RoadmapItem::STATUSES)->required()->default('planned'),
-            DatePicker::make('target_date')->required(),
+            DatePicker::make('target_date')->label('Target date'),
+            TextInput::make('target_quarter')->label('Target quarter')->placeholder('2027 Q1')->regex('/^20[0-9]{2} Q[1-4]$/')->helperText('Optional, when the exact date is not known.'),
+            TextInput::make('progress')->label('Development progress (%)')->numeric()->integer()->minValue(0)->maxValue(100)->helperText('Optional manual estimate. Leave empty to hide the progress bar.'),
 
             Select::make('company_id')->relationship('company', 'name')->searchable()->preload()->label('Audience company')->placeholder('All partner companies')->helperText('Leave empty to share with all active partner companies.'),
             Toggle::make('is_published')->label('Published to client area'),
@@ -52,6 +57,8 @@ class RoadmapItemResource extends Resource
     {
         return $table->columns([
             TextColumn::make('title')->searchable()->sortable()->limit(45),
+            TextColumn::make('game.title')->label('Game')->searchable(),
+            TextColumn::make('milestone_type')->label('Milestone'),
             TextColumn::make('status')->badge(), TextColumn::make('target_date')->date()->sortable(),
             TextColumn::make('company.name')->label('Audience')->placeholder('All partners'),
             IconColumn::make('is_published')->label('Published')->boolean(),

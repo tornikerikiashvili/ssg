@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -20,7 +21,7 @@ class Game extends PortalContent
 
     protected function casts(): array
     {
-        return [...parent::casts(), 'rtp' => 'decimal:2', 'release_date' => 'date', 'is_featured' => 'boolean', 'feature_tags' => 'array', 'specifications' => 'array', 'regions' => 'array'];
+        return [...parent::casts(), 'rtp' => 'decimal:2', 'release_date' => 'date', 'is_featured' => 'boolean', 'preview_enabled' => 'boolean', 'feature_tags' => 'array', 'specifications' => 'array'];
     }
 
     protected static function booted(): void
@@ -65,5 +66,47 @@ class Game extends PortalContent
     public function resources(): HasMany
     {
         return $this->hasMany(ResourceItem::class);
+    }
+
+    public function regionAvailabilities(): HasMany
+    {
+        return $this->hasMany(GameRegion::class);
+    }
+
+    public function roadmapItems(): HasMany
+    {
+        return $this->hasMany(RoadmapItem::class);
+    }
+
+    public function scopeRoadmapVisibleTo(Builder $query, User $user): Builder
+    {
+        if (! $user->canAccessClientArea()) {
+            return $query->whereRaw('1 = 0');
+        }
+        if ($user->is_admin) {
+            return $query;
+        }
+
+        return $query->where(fn (Builder $games) => $games->whereNull('company_id')->orWhere('company_id', $user->company_id))
+            ->where(fn (Builder $games) => $games->whereDoesntHave('regionAvailabilities')
+                ->orWhereHas('regionAvailabilities', fn (Builder $regions) => $regions->whereIn('region_id', $user->accessibleRegionIds())->whereIn('status', ['available', 'limited', 'upcoming'])));
+    }
+
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        parent::scopeVisibleTo($query, $user);
+
+        if ($user->is_admin) {
+            return $query;
+        }
+
+        $query->where(fn (Builder $games) => $games->where('release_status', 'released')->orWhere('preview_enabled', true));
+        $regionIds = $user->accessibleRegionIds();
+
+        return $query->where(fn (Builder $games): Builder => $games
+            ->whereDoesntHave('regionAvailabilities')
+            ->orWhereHas('regionAvailabilities', fn (Builder $regions): Builder => $regions
+                ->whereIn('region_id', $regionIds)
+                ->whereIn('status', ['available', 'limited'])));
     }
 }

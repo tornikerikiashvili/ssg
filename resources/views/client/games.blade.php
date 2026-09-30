@@ -55,6 +55,7 @@
           @endforelse
         </div>
         <x-pagination :records="$games" />
+        @foreach($pageBanners as $banner)<x-promo-banner :banner="$banner" />@endforeach
         <div class="heading-wrapper">
           <h2>Featured games in this selection</h2>
           <p>Featured games matching your current filters.</p>

@@ -2,11 +2,14 @@
 
 namespace App\Filament\Resources\Games\RelationManagers;
 
-use App\Filament\Resources\ResourceItems\ResourceItemResource;
-use Filament\Actions\CreateAction;
+use App\Filament\Resources\Documentations\DocumentationResource;
+use Filament\Actions\AssociateAction;
+use Filament\Actions\DissociateAction;
+use Filament\Actions\EditAction;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 
 class ResourcesRelationManager extends RelationManager
 {
@@ -14,15 +17,27 @@ class ResourcesRelationManager extends RelationManager
 
     protected static string $relationship = 'resources';
 
-    protected static ?string $title = 'Game assets & documentation';
+    protected static ?string $title = 'Documentation';
 
     public function form(Schema $schema): Schema
     {
-        return ResourceItemResource::form($schema);
+        return DocumentationResource::form($schema);
     }
 
     public function table(Table $table): Table
     {
-        return ResourceItemResource::table($table)->headerActions([CreateAction::make()]);
+        return DocumentationResource::table($table)
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->where('kind', 'documentation'))
+            ->inverseRelationship('game')
+            ->recordTitleAttribute('title')
+            ->headerActions([
+                AssociateAction::make()->label('Assign documentation')
+                    ->recordSelectOptionsQuery(fn (Builder $query): Builder => $query->where('kind', 'documentation')->whereNull('game_id'))
+                    ->preloadRecordSelect(),
+            ])
+            ->recordActions([
+                EditAction::make(),
+                DissociateAction::make()->label('Remove from game'),
+            ]);
     }
 }

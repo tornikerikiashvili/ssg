@@ -5,6 +5,7 @@ namespace App\Filament\Resources\Companies;
 use App\Filament\Resources\Companies\Pages\ManageCompanies;
 use App\Models\Company;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
@@ -26,6 +27,8 @@ class CompanyResource extends Resource
     {
         return $schema->components([
             TextInput::make('name')->required()->maxLength(255),
+            Select::make('regions')->relationship('regions', 'name')->multiple()->searchable()->preload()
+                ->helperText('Regional permissions inherited by company users. With no regions, only games without regional restrictions are accessible.'),
             Toggle::make('is_active')->default(true)->helperText('Disabling a company revokes access for all of its partner users.'),
         ]);
     }

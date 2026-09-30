@@ -24,7 +24,8 @@
 @endforeach
 </div>
         <div class="dashboard-row">
-          @if($featuredGame)<div class="banner">
+          @if($pageBanners->isNotEmpty())<div class="wrapper-vertical-l">@foreach($pageBanners as $banner)<x-promo-banner :banner="$banner" />@endforeach</div>@else
+@if($featuredGame)<div class="banner">
             <p class="banner_category">Featured Game</p>
             <div class="banner_inner">
               <div>
@@ -60,6 +61,7 @@
             </div>
             <div class="banner_image-wrapper">@if($featuredGame->cover_image)<img src="{{ asset($featuredGame->cover_image) }}" alt="{{ $featuredGame->title }}" class="fullsize-img">@endif</div>
           </div>@else<div class="banner"><p class="banner_category">Featured Game</p><p class="banner_title">No featured games yet</p></div>@endif
+          @endif
           <div class="dashboard_banner-block">
             <div data-tabs="" class="dashboard_block">
               <div no-scrollbar="" class="dashboard_block-header-wrapper">

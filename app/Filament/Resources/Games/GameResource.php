@@ -8,6 +8,7 @@ use App\Filament\Resources\Games\Pages\ManageGames;
 use App\Filament\Resources\Games\RelationManagers\ResourcesRelationManager;
 use App\Models\CatalogOption;
 use App\Models\Game;
+use App\Models\GameRegion;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\DatePicker;
@@ -50,6 +51,8 @@ class GameResource extends Resource
 
         return $schema->components([Tabs::make('Game editor')->columnSpanFull()->tabs([
             Tab::make('Details')->schema([
+                Select::make('release_status')->options(['upcoming' => 'Upcoming', 'released' => 'Released'])->required()->default('released'),
+                Toggle::make('preview_enabled')->label('Allow upcoming game preview')->helperText('Published upcoming games can open for permitted users. Assets stay unavailable until released.'),
                 TextInput::make('title')->required()->maxLength(255),
                 TextInput::make('slug')->required()->maxLength(255)->alphaDash()->unique(ignoreRecord: true),
                 Textarea::make('description')->rows(4)->maxLength(20000)->columnSpanFull(),
@@ -69,10 +72,11 @@ class GameResource extends Resource
                 Textarea::make('rules')->rows(8)->maxLength(30000),
             ]),
             Tab::make('Regions & engagement tools')->schema([
-                Repeater::make('regions')->schema([
-                    TextInput::make('country')->required()->maxLength(100),
-                    Select::make('status')->options(['available' => 'Available', 'limited' => 'Limited', 'unavailable' => 'Not available'])->required(),
-                ])->columns(2)->maxItems(250)->defaultItems(0)->helperText('Product availability information. Company access is controlled separately.'),
+                Repeater::make('regionAvailabilities')->label('Regional availability')->relationship()->schema([
+                    Select::make('region_id')->label('Region')->relationship('region', 'name')->searchable()->preload()->required()->distinct()
+                        ->disableOptionsWhenSelectedInSiblingRepeaterItems(),
+                    Select::make('status')->options(GameRegion::STATUSES)->required()->default('available'),
+                ])->columns(2)->maxItems(250)->defaultItems(0)->helperText('No regions means available in all regions. Available and Limited regions grant access when the partner has a matching regional permission.'),
                 Select::make('engagementTools')->relationship('engagementTools', 'title')->multiple()->searchable()->preload(),
             ]),
             Tab::make('Publishing & access')->schema([
