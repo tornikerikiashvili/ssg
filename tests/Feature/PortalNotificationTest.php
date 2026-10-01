@@ -28,6 +28,39 @@ class PortalNotificationTest extends TestCase
         }
     }
 
+    public function test_admin_dashboard_shows_latest_seven_of_each_communication(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $company = Company::factory()->create(['name' => 'Dashboard audience']);
+        foreach ([PortalNotification::class, Announcement::class] as $model) {
+            for ($index = 1; $index <= 8; $index++) {
+                $model::factory()->create([
+                    'title' => class_basename($model).' item '.$index,
+                    'created_at' => now()->subDays(9 - $index),
+                    'is_published' => $index !== 8,
+                    'company_id' => $index === 8 ? $company->id : null,
+                ]);
+            }
+        }
+
+        $response = $this->get('/admin')->assertOk()
+            ->assertSee('Dashboard audience')->assertSee('All clients')
+            ->assertSee('Draft')->assertSee('Published');
+        foreach ([PortalNotification::class, Announcement::class] as $model) {
+            $prefix = class_basename($model).' item ';
+            $response->assertDontSee($prefix.'1')
+                ->assertSeeInOrder(array_map(fn (int $index): string => $prefix.$index, range(8, 2)));
+        }
+    }
+
+    public function test_admin_dashboard_shows_empty_communication_lists(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->get('/admin')->assertOk()
+            ->assertSee('No notifications yet.')->assertSee('No announcements yet.')
+            ->assertSee('Add notification')->assertSee('Add announcement');
+    }
+
     public function test_admin_can_create_and_delete_notifications_without_creating_other_content(): void
     {
         Filament::setCurrentPanel(Filament::getPanel('admin'));

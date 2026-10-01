@@ -139,6 +139,19 @@ class ClientAccessTest extends TestCase
         $this->get('/dashboard')->assertOk()->assertDontSee('Administration');
     }
 
+    public function test_admin_topbar_replaces_search_with_sign_out(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->get('/admin')->assertOk()
+            ->assertSee('data-admin-sign-out', false)
+            ->assertSee('action="'.route('filament.admin.auth.logout').'"', false)
+            ->assertDontSee('fi-global-search-field', false);
+
+        $this->post(route('filament.admin.auth.logout'))->assertRedirect();
+        $this->assertGuest();
+        $this->get('/admin')->assertRedirect(route('filament.admin.auth.login'));
+    }
+
     public function test_disabled_admin_cannot_access_filament(): void
     {
         $admin = User::factory()->create(['is_admin' => true, 'is_active' => false]);

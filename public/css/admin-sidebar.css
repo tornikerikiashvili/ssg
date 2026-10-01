@@ -1,0 +1,19 @@
+/* Keep navigation distinct from the content area in both color modes. */
+.fi-sidebar {
+    background-color: #ffffff;
+    border-inline-end: 1px solid #e5e7eb;
+}
+
+.dark .fi-sidebar {
+    background-color: #18181b;
+    border-inline-end-color: #3f3f46;
+}
+
+.admin-communications-list { margin-top: 1.25rem; }
+.admin-communications-item { padding: 0.875rem 0; border-top: 1px solid #e5e7eb; }
+.admin-communications-title-row, .admin-communications-meta { display: flex; justify-content: space-between; gap: 0.75rem; align-items: flex-start; }
+.admin-communications-title { font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+.admin-communications-title-row .fi-badge { flex-shrink: 0; }
+.admin-communications-meta { flex-wrap: wrap; margin-top: 0.375rem; font-size: 0.8125rem; color: #6b7280; }
+.dark .admin-communications-item { border-color: #3f3f46; }
+.dark .admin-communications-meta { color: #a1a1aa; }

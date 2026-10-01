@@ -9,8 +9,11 @@ use Filament\Http\Middleware\DispatchServingFilamentEvent;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Support\Assets\Css;
 use Filament\Support\Colors\Color;
+use Filament\View\PanelsRenderHook;
 use Filament\Widgets\AccountWidget;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -29,6 +32,19 @@ class AdminPanelProvider extends PanelProvider
             ->brandName('SmartSoft Administration')
             ->favicon(asset('favicon.png'))
             ->login()
+            ->globalSearch(false)
+            ->renderHook(PanelsRenderHook::GLOBAL_SEARCH_AFTER, fn (): View => view('components.admin-sign-out'))
+            ->sidebarCollapsibleOnDesktop()
+            ->navigationGroups([
+                'Catalog',
+                'Access management',
+                'Communications',
+                'Content',
+                'Taxonomy',
+            ])
+            ->assets([
+                Css::make('admin-sidebar', asset('css/admin-sidebar.css')),
+            ])
             ->colors([
                 'primary' => Color::hex('#f15b4e'),
             ])

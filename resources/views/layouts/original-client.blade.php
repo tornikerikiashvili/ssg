@@ -560,7 +560,7 @@
                   <a data-switch-theme="" href="#" class="profile-menu_button w-inline-block">
                     <div class="theme-switch">
                       <div class="theme-switch_dot"></div>
-                      <p>Dark</p>
+                      <p data-theme-label>Light</p>
                     </div>
                     <p class="text-color-text">Theme</p>
                   </a>
@@ -822,8 +822,14 @@
         $(this).attr('data-text', $(this).find('.button_text').text())
       })
       // Switch color theme
-      $('[data-switch-theme]').click(function() {
+      function updateThemeLabel() {
+        $('[data-theme-label]').text($('body').hasClass('light-mode') ? 'Dark' : 'Light');
+      }
+      updateThemeLabel();
+      $('[data-switch-theme]').click(function(event) {
+        event.preventDefault();
         $('body').toggleClass('light-mode');
+        updateThemeLabel();
       });
       // Expand/collapse sidebar
       $('.sidebar_collapse-button').click(function() {
