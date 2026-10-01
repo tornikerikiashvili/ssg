@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\DropboxClient;
 use App\Models\Announcement;
 use App\Models\CatalogOption;
 use App\Models\EngagementTool;
@@ -50,8 +51,6 @@ class ClientPortalController extends Controller
             'recentGames' => (clone $games)->latest()->orderByDesc('id')->limit(5)->get(),
             'featuredGames' => (clone $games)->where('is_featured', true)->latest()->orderByDesc('id')->limit(6)->get(),
             'featuredGame' => (clone $games)->where('is_featured', true)->latest()->orderByDesc('id')->first(),
-            'announcements' => Announcement::visibleTo($user)->where('show_on_dashboard', true)->latest()->orderByDesc('id')->limit(4)->get(),
-            'newResources' => ResourceItem::visibleTo($user)->latest()->orderByDesc('id')->limit(4)->get(),
             'gameCount' => (clone $games)->count(),
             'newGameCount' => (clone $games)->where('created_at', '>=', $since)->count(),
             'newAssetCount' => (clone $assets)->where('created_at', '>=', $since)->count(),
@@ -99,7 +98,7 @@ class ClientPortalController extends Controller
         $documents = $game->resources()->visibleTo($request->user())->where('kind', 'documentation')->with('catalogOption')->get();
         $tools = $game->engagementTools()->visibleTo($request->user())->get();
         $relatedGames = Game::visibleTo($request->user())->whereKeyNot($game->id)->with('categoryTerm')->limit(6)->get();
-        $assetCategories = CatalogOption::options('asset');
+        $assetCategories = $this->dropboxAssetCategories($resources);
 
         return view('client.game', compact('game', 'resources', 'documents', 'tools', 'assetCategories', 'relatedGames'));
     }
@@ -154,12 +153,25 @@ class ClientPortalController extends Controller
             : null;
         $title = ['download' => 'Download Center', 'documentation' => 'Documentation', 'certificate' => 'Licenses & Certificates'][$kind];
 
-        return view('client.resources', ['recentDownloads' => ResourceDownload::recentFor($request->user()), 'assetCategories' => CatalogOption::options('asset'), 'catalogOptions' => CatalogOption::orderBy('sort_order')->orderBy('name')->get()->groupBy('kind')] + compact('resources', 'licenses', 'title', 'kind'));
+        return view('client.resources', ['recentDownloads' => ResourceDownload::recentFor($request->user()), 'assetCategories' => $this->dropboxAssetCategories($resources->getCollection()), 'catalogOptions' => CatalogOption::orderBy('sort_order')->orderBy('name')->get()->groupBy('kind')] + compact('resources', 'licenses', 'title', 'kind'));
     }
 
-    public function resource(Request $request, int $resourceItem): View
+    /** @param Collection<int, ResourceItem> $resources
+     * @return array<int, string>
+     */
+    private function dropboxAssetCategories(Collection $resources): array
+    {
+        return $resources->whereNotNull('dropbox_file_id')->pluck('catalogOption')->filter()
+            ->unique('id')->sortBy('name')->pluck('name', 'id')->all();
+    }
+
+    public function resource(Request $request, int $resourceItem): View|StreamedResponse
     {
         $resource = ResourceItem::visibleTo($request->user())->with('game')->findOrFail($resourceItem);
+
+        if ($resource->kind === 'documentation') {
+            return $this->fileResponse($request, $resource);
+        }
 
         return view('client.resource', compact('resource'));
     }
@@ -167,7 +179,33 @@ class ClientPortalController extends Controller
     public function download(Request $request, int $resourceItem): StreamedResponse
     {
         $resource = ResourceItem::visibleTo($request->user())->findOrFail($resourceItem);
+
+        return $this->fileResponse($request, $resource);
+    }
+
+    private function fileResponse(Request $request, ResourceItem $resource): StreamedResponse
+    {
         abort_unless($resource->hasDownloadableFile(), 404);
+        if ($resource->dropbox_file_id) {
+            $temporary = tempnam(sys_get_temp_dir(), 'dropbox-');
+            try {
+                app(DropboxClient::class)->downloadTo($resource->dropbox_file_id, $temporary);
+            } catch (\Throwable) {
+                unlink($temporary);
+                abort(502, 'Dropbox download is currently unavailable. Please try again.');
+            }
+            if ($request->isMethod('GET')) {
+                ResourceDownload::create(['user_id' => $request->user()->id, 'resource_item_id' => $resource->id]);
+            }
+
+            return response()->streamDownload(function () use ($temporary): void {
+                try {
+                    readfile($temporary);
+                } finally {
+                    unlink($temporary);
+                }
+            }, basename($resource->file_path), ['Content-Type' => 'application/octet-stream', 'X-Content-Type-Options' => 'nosniff', 'Cache-Control' => 'private, no-store']);
+        }
         abort_unless(Storage::disk('local')->exists($resource->file_path), 404);
 
         if ($request->isMethod('GET')) {
@@ -204,32 +242,63 @@ class ClientPortalController extends Controller
     {
         $total = 0;
         foreach ($resources as $resource) {
-            abort_unless($resource->hasDownloadableFile() && Storage::disk('local')->exists($resource->file_path), 404);
-            $total += Storage::disk('local')->size($resource->file_path);
+            abort_unless($resource->hasDownloadableFile(), 404);
+            if ($resource->dropbox_file_id) {
+                $total += $resource->file_size;
+            } else {
+                abort_unless(Storage::disk('local')->exists($resource->file_path), 404);
+                $total += Storage::disk('local')->size($resource->file_path);
+            }
         }
         abort_if($total > 100 * 1024 * 1024, 422, 'Select fewer files. The archive limit is 100 MB.');
         $path = tempnam(sys_get_temp_dir(), 'smartsoft-assets-');
         $zip = new ZipArchive;
+        $temporaryFiles = [];
+        $actualSize = 0;
+        $zipOpen = false;
         try {
             if ($zip->open($path, ZipArchive::OVERWRITE) !== true) {
                 throw new \RuntimeException('Cannot create archive.');
             }
+            $zipOpen = true;
             foreach ($resources as $resource) {
-                if (! $zip->addFile(Storage::disk('local')->path($resource->file_path), $resource->id.'-'.basename($resource->file_path))) {
+                $source = Storage::disk('local')->path($resource->file_path);
+                if ($resource->dropbox_file_id) {
+                    $source = tempnam(sys_get_temp_dir(), 'dropbox-zip-');
+                    $temporaryFiles[] = $source;
+                    try {
+                        app(DropboxClient::class)->downloadTo($resource->dropbox_file_id, $source, 100 * 1024 * 1024 - $actualSize);
+                    } catch (\Throwable) {
+                        abort(502, 'Dropbox archive could not be prepared. Please retry or select fewer files.');
+                    }
+                }
+                $actualSize += filesize($source);
+                abort_if($actualSize > 100 * 1024 * 1024, 422, 'Select fewer files. The archive limit is 100 MB.');
+                if (! $zip->addFile($source, $resource->id.'-'.basename($resource->file_path))) {
                     throw new \RuntimeException('Cannot add resource to archive.');
                 }
             }
             if (! $zip->close()) {
                 throw new \RuntimeException('Cannot finish archive.');
             }
+            $zipOpen = false;
             foreach ($resources as $resource) {
                 ResourceDownload::create(['user_id' => $request->user()->id, 'resource_item_id' => $resource->id]);
             }
         } catch (\Throwable $exception) {
+            if ($zipOpen) {
+                $zip->close();
+            }
             if (is_file($path)) {
                 unlink($path);
             }
             throw $exception;
+        } finally {
+            foreach ($temporaryFiles as $temporary) {
+                if (is_file($temporary)) {
+                    unlink($temporary);
+                }
+            }
         }
 
         return response()->download($path, 'game-assets.zip', ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff'])->deleteFileAfterSend(true);

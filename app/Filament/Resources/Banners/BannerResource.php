@@ -53,15 +53,18 @@ class BannerResource extends Resource
                 Toggle::make('is_published')->label('Published'),
             ])->columns(2),
             Section::make('Artwork and video')->schema([
-                $image('logo_path', 'Logo (transparent PNG recommended)'),
+                $image('logo_path', 'Logo (SVG or transparent PNG recommended)')->acceptedFileTypes(['image/svg+xml', 'image/png', 'image/jpeg', 'image/webp']),
                 $image('image_path', 'Foreground artwork'),
-                Select::make('original_artwork')->options(Banner::ARTWORK)->label('Use original HTML artwork')->helperText('Used when no foreground image is uploaded.'),
+                Select::make('original_artwork')->options(Banner::ARTWORK)->label('Use original HTML artwork')->helperText('Used when no image or video is uploaded.'),
                 Toggle::make('use_original_video')->label('Use original HTML background video'),
                 FileUpload::make('video_path')->label('Background video')->disk('public')->directory('banners')->acceptedFileTypes(['video/mp4', 'video/webm'])->maxSize(12288)->preventFilePathTampering(),
                 $image('poster_path', 'Video poster'),
             ])->columns(2),
             $button('primary', 'Primary button'),
-            $button('secondary', 'Secondary button'),
+            Section::make('Play Game button')->schema([
+                TextInput::make('secondary_url')->label('Test play URL')->url()->regex('~^https?://~i')->maxLength(2048)
+                    ->helperText('Opens the test-play version of the game. Leave empty to hide the Play Game button.'),
+            ]),
         ]);
     }
 

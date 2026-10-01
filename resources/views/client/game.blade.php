@@ -19,7 +19,12 @@
             <h1 class="banner_title">{{ $game->title }}</h1>
             <div class="tags">
               <p class="tag">{{ $game->category }}</p>
-              <p class="tag is-red">{{ $game->is_demo ? 'Demo' : ($game->is_featured ? 'Featured' : 'Game') }}</p>
+              @if($game->is_featured)
+              <p class="tag is-red">Featured</p>
+              @endif
+              @if($game->release_status === 'upcoming')
+              <p class="tag is-blue">Upcoming</p>
+              @endif
             </div>
             <div class="banner_inner">
               <div class="banner_info-line">
@@ -33,31 +38,33 @@
                 </div>
                 <div>
                   <p class="games-inner_hero-info-title">Max Bet</p>
-                  <p class="text-weight-semibold">{{ $game->specifications['Max bet'] ?? '—' }}</p>
+                  <p class="text-weight-semibold">{{ $game->max_bet ?? $game->specificationValue('Max bet') ?? '—' }}</p>
                 </div>
                 <div>
-                  <p class="games-inner_hero-info-title">Mix Bet</p>
-                  <p class="text-weight-semibold">{{ $game->specifications['Min bet'] ?? '—' }}</p>
+                  <p class="games-inner_hero-info-title">Min Bet</p>
+                  <p class="text-weight-semibold">{{ $game->min_bet ?? $game->specificationValue('Min bet') ?? '—' }}</p>
                 </div>
                 <div>
                   <p class="games-inner_hero-info-title">Certificates</p>
-                  <p class="text-weight-semibold">Not specified</p>
+                  <p class="text-weight-semibold">{{ $game->certifications ?: 'Not specified' }}</p>
                 </div>
                 <div>
                   <p class="games-inner_hero-info-title">Languages</p>
-                  <p class="text-weight-semibold">{{ $game->specifications['Languages'] ?? '—' }}</p>
+                  <p class="text-weight-semibold">{{ $game->languages ?? $game->specificationValue('Languages') ?? '—' }}</p>
                 </div>
               </div>
             </div>
             <div class="wrapper-vertical-l"><p>{{ $game->description }}</p></div>
             <div class="buttons z-index-2">
-              <a href="#" class="button is-secondary w-inline-block">
+              @if($game->demo_url)
+              <a href="{{ $game->demo_url }}" target="_blank" rel="noopener noreferrer" class="button is-secondary w-inline-block">
                 <div class="button_icon w-embed"><svg width="24" viewbox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                     <path d="M5.05713 20.8364V3.16364L18.9429 12L5.05713 20.8364Z"></path>
                   </svg>
                 </div>
                 <p class="button_text">Play Demo</p>
               </a>
+              @endif
               <a href="#resources" class="button w-inline-block">
                 <p class="button_text">Download Assets</p>
                 <div class="button_icon w-embed"><svg width="24" viewbox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -67,7 +74,7 @@
               </a>
             </div>
           </div>
-          <div class="games-inner_hero-img-wrapper"><img src="{{ asset($game->cover_image ?: 'client-design/images/game-1.jpg') }}" loading="lazy" width="299" height="374" alt="Image" class="games-inner_hero-img"></div>
+          <div class="games-inner_hero-img-wrapper"><img src="{{ $game->cover_image_url ?: asset('client-design/images/game-1.jpg') }}" loading="lazy" width="299" height="374" alt="Image" class="games-inner_hero-img"></div>
         </div>
         <div data-collapsing="" class="dashboard-row">
           <div class="quick-actions_wrapper">
@@ -89,8 +96,32 @@
                 </div>
               </div>
               <div>
-                <div data-tab-pane=""><p style="white-space:pre-line">{{ $game->features ?: 'No features added yet.' }}</p><div class="tags">@foreach($game->feature_tags ?? [] as $tag)<p class="tag">{{ $tag }}</p>@endforeach</div></div>
-                <div data-tab-pane=""><ul class="specifications_list w-list-unstyled">@forelse($game->specifications ?? [] as $label => $value)<li class="specifications_list-item"><strong>{{ $label }}:</strong> {{ $value }}</li>@empty<li>No specifications added yet.</li>@endforelse</ul></div>
+                <div data-tab-pane="">
+                  <div class="wrapper-vertical-l">
+                    <p style="white-space:pre-line">{{ $game->features ?: 'No features added yet.' }}</p>
+                    <div class="tags">
+                      @foreach($game->feature_tags ?? [] as $tag)
+                      <p @class(['tag', 'is-red' => $loop->index % 3 === 1, 'is-blue' => $loop->index % 3 === 2])>{{ $tag }}</p>
+                      @endforeach
+                    </div>
+                  </div>
+                </div>
+                <div data-tab-pane="">
+                  <ul role="list" class="specifications_list w-list-unstyled">
+                    @forelse($game->specifications as $specification)
+                    <li class="specifications_list-item">
+                      <p>{{ $specification['label'] }}</p>
+                      @if(!empty($specification['children']))
+                      <ul role="list" class="specifications_list w-list-unstyled">
+                        @foreach($specification['children'] as $point)
+                        <li class="specifications_list-item-sublevel">{{ $point }}</li>
+                        @endforeach
+                      </ul>
+                      @endif
+                    </li>
+                    @empty<li>No specifications added yet.</li>@endforelse
+                  </ul>
+                </div>
                 <div data-tab-pane=""><p style="white-space:pre-line">{{ $game->rules ?: 'No rules added yet.' }}</p></div>
               </div>
             </div>
@@ -111,10 +142,27 @@
                 <div class="tab-link_line"></div>
               </a>
             </div>
+            <x-regions-map :availabilities="$game->regionAvailabilities" />
             <div class="wrapper-vertical-l">@forelse($game->regionAvailabilities as $availability)<div class="map_info-item"><div class="{{ ['available' => 'blue-dot', 'limited' => 'red-dot', 'unavailable' => 'grey-dot'][$availability->status] ?? 'grey-dot' }}"></div><p>{{ $availability->region->name }} — {{ \App\Models\GameRegion::STATUSES[$availability->status] ?? 'Not specified' }}</p></div>@empty<p class="text-color-subtitles">Available in all regions.</p>@endforelse</div>
           </div>
         </div>
-        <div class="dashboard_block is-dark" id="resources"><div class="dashboard_block-header"><a class="tab-link is-active"><p>Game Assets</p><div class="tab-link_line"></div></a></div><x-asset-filters :categories="$assetCategories" /><form id="asset-archive" method="POST" action="{{ route('games.assets.archive', $game->slug) }}">@csrf<div id="asset-selection-inputs"></div><div class="buttons"><button type="button" data-select-all class="card-button"><div class="button_checkbox"></div><span class="button_text">Select all</span></button><button type="submit" class="card-button is-grey">Download selected ZIP</button></div><p class="text-size-small text-color-subtitles">Select up to 50 files, 100 MB total.</p></form><x-original-assets :resources="$resources" /><p id="asset-filter-empty" class="text-color-subtitles" role="status" hidden>No assets match this category.</p></div>
+        <div class="dashboard_block is-dark" id="resources">
+          <div class="dashboard_block-header"><a class="tab-link is-active"><p>Game Assets</p><div class="tab-link_line"></div></a></div>
+          <x-asset-filters :categories="$assetCategories">
+            <x-slot:selectionActions>
+              <div id="asset-selection-actions" class="buttons" hidden style="display:none">
+                <button type="button" data-select-all aria-pressed="false" class="card-button"><span class="button_checkbox" aria-hidden="true"></span><span class="button_text">Select all</span></button>
+                <button type="submit" form="asset-archive" class="card-button is-grey">Download selected</button>
+              </div>
+            </x-slot:selectionActions>
+          </x-asset-filters>
+          <div id="asset-selection-hint" class="tag" role="status"><p>To select multiple options, please click on the multiplier cards.</p></div>
+          <p id="asset-selection-summary" class="text-size-small text-color-subtitles" role="status"></p>
+          <p id="asset-selection-error" class="text-size-small text-color-red-orange" role="alert" hidden></p>
+          <form id="asset-archive" hidden style="display:none" method="POST" action="{{ route('games.assets.archive', $game->slug) }}">@csrf<div id="asset-selection-inputs"></div></form>
+          <x-original-assets :resources="$resources" />
+          <p id="asset-filter-empty" class="text-color-subtitles" role="status" hidden>No assets match this category.</p>
+        </div>
         <div class="dashboard_block is-dark">
           <div no-scrollbar="" class="dashboard_block-header">
             <a href="#" class="tab-link is-active w-inline-block">
@@ -122,13 +170,13 @@
               <div class="tab-link_line"></div>
             </a>
           </div>
-          <div class="assets_list">@forelse($documents as $document)<a href="{{ route('resources.show', $document->id) }}" class="docs_item w-inline-block">
+          <div class="assets_list">@forelse($documents as $document)<a href="{{ route('resources.download', $document->id) }}" class="docs_item w-inline-block">
               <p class="tag">{{ $document->catalogOption?->name ?? 'Document' }}</p>
               <div class="wrapper-vertical-xs">
                 <p class="text-weight-semibold">{{ $document->title }}</p>
                 <p class="text-size-small">{{ $document->description }}</p>
               </div><span class="card-button">
-                <p>Open</p>
+                <p>Download</p>
               </span>
             </a>@empty<p>No documents assigned.</p>@endforelse</div>
         </div>
@@ -157,7 +205,7 @@
         <div class="cards-swiper">
           <div class="swiper-wrapper">@foreach($relatedGames as $related)<div class="swiper_item swiper-slide">
               <div class="games_item">
-                <a href="{{ route('games.show', $related->slug) }}" aria-current="page" class="w-inline-block w--current"><img src="{{ asset($related->cover_image ?: 'client-design/images/Logo-icon.svg') }}" loading="lazy" width="282" height="347" alt="Cover" class="games_item-image"></a>
+                <a href="{{ route('games.show', $related->slug) }}" aria-current="page" class="w-inline-block w--current"><img src="{{ $related->cover_image_url ?: asset('client-design/images/Logo-icon.svg') }}" loading="lazy" width="282" height="347" alt="Cover" class="games_item-image"></a>
                 <a href="{{ route('games.show', $related->slug) }}" aria-current="page" class="games_item-info-block w-inline-block w--current">
                   <div class="games_item-info-col">
                     <h2>{{ $related->title }}</h2>
@@ -197,6 +245,38 @@ const assetCards = [...document.querySelectorAll('#resources .assets_item[data-r
 const assetList = document.querySelector('#resources .assets_list');
 const selectAllButton = document.querySelector('#resources [data-select-all]');
 const archiveForm = document.querySelector('#asset-archive');
+const assetSelectionHint = document.querySelector('#asset-selection-hint');
+const assetCategories = assetFilters.querySelector('.filter_buttons');
+const selectionActions = document.querySelector('#asset-selection-actions');
+const selectionSummary = document.querySelector('#asset-selection-summary');
+const selectionError = document.querySelector('#asset-selection-error');
+const downloadAssetsButton = selectionActions.querySelector('[type="submit"]');
+const selectedAssets = () => visibleAssets().filter(card => card.classList.contains('is-active'));
+const assetSize = card => {
+    const value = card.querySelector('[data-asset-size]')?.dataset.assetSize;
+    return value === undefined || value === '' ? NaN : Number(value);
+};
+const totalSize = cards => cards.reduce((total, card) => total + assetSize(card), 0);
+function showSelectionError(message = '') {
+    selectionError.textContent = message;
+    selectionError.hidden = !message;
+}
+function validSelection(cards) {
+    if (cards.length > 50) {
+        showSelectionError('Select up to 50 files per download.');
+        return false;
+    }
+    if (cards.some(card => !Number.isFinite(assetSize(card)) || assetSize(card) < 0)) {
+        showSelectionError('A file size is unavailable. Please download that file individually.');
+        return false;
+    }
+    if (totalSize(cards) > 100 * 1024 * 1024) {
+        showSelectionError('The selected files exceed 100 MB. Please select fewer files.');
+        return false;
+    }
+    showSelectionError();
+    return true;
+}
 const visibleAssets = () => assetCards.filter(card => !card.hidden);
 function selectAsset(card, selected) {
     card.classList.toggle('is-active', selected);
@@ -204,11 +284,22 @@ function selectAsset(card, selected) {
 }
 function updateAssetSelection() {
     const visible = visibleAssets();
+    const hasSelection = visible.some(card => card.classList.contains('is-active'));
+    assetCategories.hidden = hasSelection;
+    assetCategories.style.display = hasSelection ? 'none' : '';
+    document.querySelector('#asset-selection-inputs').replaceChildren();
+    selectionActions.hidden = !hasSelection;
+    selectionActions.style.display = hasSelection ? '' : 'none';
+    selectionSummary.textContent = `${selectedAssets().length} / 50 files selected · ${(totalSize(selectedAssets()) / (1024 * 1024)).toFixed(2)} / 100 MB`;
+    assetSelectionHint.hidden = hasSelection;
+    assetSelectionHint.style.display = hasSelection ? 'none' : '';
     const allSelected = visible.length > 0 && visible.every(card => card.classList.contains('is-active'));
     selectAllButton.disabled = visible.length === 0;
+    selectAllButton.setAttribute('aria-pressed', String(allSelected));
     selectAllButton.querySelector('.button_text').textContent = allSelected ? 'Unselect all' : 'Select all';
     selectAllButton.querySelector('.button_checkbox').classList.toggle('is-active', allSelected);
-    archiveForm.querySelector('[type="submit"]').disabled = !visible.some(card => card.classList.contains('is-active'));
+    downloadAssetsButton.disabled = !hasSelection;
+    downloadAssetsButton.textContent = allSelected ? 'Download all' : 'Download selected';
 }
 function filterAssets() {
     const category = assetFilters.querySelector('[name="asset_category"]:checked').value;
@@ -232,6 +323,10 @@ function filterAssets() {
 }
 assetFilters.addEventListener('submit', event => event.preventDefault());
 assetFilters.addEventListener('change', event => {
+    if (event.target.name === 'asset_category') {
+        assetCards.forEach(card => selectAsset(card, false));
+        showSelectionError();
+    }
     filterAssets();
     if (event.target.name === 'asset_sort') {
         const trigger = assetFilters.querySelector('[data-accordion-trigger]');
@@ -241,21 +336,25 @@ assetFilters.addEventListener('change', event => {
 });
 assetCards.forEach(card => card.addEventListener('click', event => {
     if (!event.target.closest('a')) {
-        selectAsset(card, !card.classList.contains('is-active'));
+        const selecting = !card.classList.contains('is-active');
+        if (selecting && !validSelection([...selectedAssets(), card])) return;
+        showSelectionError();
+        selectAsset(card, selecting);
         updateAssetSelection();
     }
 }));
 selectAllButton.addEventListener('click', () => {
     const visible = visibleAssets();
     const select = visible.some(card => !card.classList.contains('is-active'));
+    if (select && !validSelection(visible)) return;
+    showSelectionError();
     visible.forEach(card => selectAsset(card, select));
     updateAssetSelection();
 });
 archiveForm.addEventListener('submit', event => {
     const selected = visibleAssets().filter(card => card.classList.contains('is-active'));
-    if (!selected.length || selected.length > 50) {
+    if (!selected.length || !validSelection(selected)) {
         event.preventDefault();
-        alert('Select between 1 and 50 files.');
         return;
     }
     const container = document.querySelector('#asset-selection-inputs');

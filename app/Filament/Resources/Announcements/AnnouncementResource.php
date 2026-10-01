@@ -29,14 +29,15 @@ class AnnouncementResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'title';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Content';
+    protected static string|UnitEnum|null $navigationGroup = 'Communications';
 
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
             TextInput::make('title')->required()->maxLength(255),
-            TextInput::make('slug')->required()->maxLength(255)->alphaDash()->unique(ignoreRecord: true),
+            TextInput::make('teaser')->maxLength(255)->helperText('Short summary shown between the title and description.'),
             Textarea::make('description')->rows(5)->maxLength(20000)->columnSpanFull(),
+            Select::make('color')->label('Color')->options(Announcement::NOTIFICATION_COLORS)->required()->default('green')->in(array_keys(Announcement::NOTIFICATION_COLORS)),
 
             Toggle::make('show_on_dashboard')->label('Show on Dashboard')->default(true),
             Toggle::make('show_on_roadmap')->label('Show on Roadmap')->default(false),

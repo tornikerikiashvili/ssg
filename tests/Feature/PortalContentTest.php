@@ -210,11 +210,11 @@ class PortalContentTest extends TestCase
     public static function contentForms(): array
     {
         return [
-            'game' => [ManageGames::class, 'games', ['category' => 'Crash']],
-            'resource' => [ManageResourceItems::class, 'resource_items', ['kind' => 'documentation']],
+            'game' => [ManageGames::class, 'games', ['slug' => 'created-in-cms', 'category' => 'Crash']],
+            'resource' => [ManageResourceItems::class, 'resource_items', ['slug' => 'created-in-cms', 'kind' => 'documentation']],
             'announcement' => [ManageAnnouncements::class, 'announcements', ['priority' => 'info']],
-            'roadmap' => [ManageRoadmapItems::class, 'roadmap_items', ['status' => 'planned', 'target_date' => '2027-01-01']],
-            'engagement' => [ManageEngagementTools::class, 'engagement_tools', ['category' => 'Promotion']],
+            'roadmap' => [ManageRoadmapItems::class, 'roadmap_items', ['slug' => 'created-in-cms', 'status' => 'planned', 'target_date' => '2027-01-01']],
+            'engagement' => [ManageEngagementTools::class, 'engagement_tools', ['slug' => 'created-in-cms', 'category' => 'Promotion']],
         ];
     }
 
@@ -223,7 +223,7 @@ class PortalContentTest extends TestCase
     {
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $data = [
-            'title' => 'Created in CMS', 'slug' => 'created-in-cms', 'description' => 'New content',
+            'title' => 'Created in CMS', 'description' => 'New content',
             'is_published' => true, 'is_demo' => true, ...$extra,
         ];
         if ($table === 'games') {
@@ -233,7 +233,7 @@ class PortalContentTest extends TestCase
         } else {
             Livewire::test($page)->callAction('create', data: $data)->assertHasNoActionErrors();
         }
-        $this->assertDatabaseHas($table, ['slug' => 'created-in-cms', 'is_published' => true]);
+        $this->assertDatabaseHas($table, ['title' => 'Created in CMS', 'is_published' => true, ...$extra]);
     }
 
     /** @return array<string, array{class-string, string}> */
@@ -253,12 +253,12 @@ class PortalContentTest extends TestCase
         $this->actingAs(User::factory()->create(['is_admin' => true]));
 
         Livewire::test($page)->callAction('create', data: [
-            'title' => 'Gaming license', 'slug' => 'gaming-license',
+            'title' => 'Gaming license',
             'company_id' => $client->company_id, 'is_published' => true,
             'file_path' => UploadedFile::fake()->create('license.pdf', 10, 'application/pdf'),
         ])->assertHasNoActionErrors();
 
-        $certificate = ResourceItem::where('slug', 'gaming-license')->firstOrFail();
+        $certificate = ResourceItem::where('title', 'Gaming license')->firstOrFail();
         $this->assertSame($kind, $certificate->kind);
         $this->assertNull($certificate->game_id);
         $this->assertNull($certificate->catalog_option_id);
@@ -323,10 +323,11 @@ class PortalContentTest extends TestCase
         Livewire::test(ManageDocumentationCategories::class)
             ->assertCanSeeTableRecords([$category])->assertCanNotSeeTableRecords([$assetCategory]);
         Livewire::test(ManageDocumentations::class)->callAction('create', data: [
-            'title' => 'Platform setup', 'slug' => 'platform-setup', 'catalog_option_id' => $category->id,
+            'title' => 'Platform setup', 'catalog_option_id' => $category->id,
             'is_published' => true, 'file_path' => UploadedFile::fake()->create('setup.pdf', 10, 'application/pdf'),
         ])->assertHasNoActionErrors();
-        $document = ResourceItem::where('slug', 'platform-setup')->firstOrFail();
+        $document = ResourceItem::where('title', 'Platform setup')->firstOrFail();
+        $this->assertNull($document->slug);
         $this->assertSame('documentation', $document->kind);
         $this->assertNull($document->game_id);
         Storage::disk('local')->assertExists($document->file_path);
@@ -350,10 +351,43 @@ class PortalContentTest extends TestCase
         $assetCategory = CatalogOption::factory()->create(['kind' => 'asset']);
         foreach ([null, $assetCategory->id] as $categoryId) {
             Livewire::test(ManageDocumentations::class)->callAction('create', data: [
-                'title' => 'Invalid category', 'slug' => 'invalid-category', 'catalog_option_id' => $categoryId,
+                'title' => 'Invalid category', 'catalog_option_id' => $categoryId,
             ])->assertHasActionErrors(['catalog_option_id']);
         }
-        $this->assertDatabaseMissing('resource_items', ['slug' => 'invalid-category']);
+        $this->assertDatabaseMissing('resource_items', ['title' => 'Invalid category']);
+    }
+
+    /** @return array<string, array{class-string, string}> */
+    public static function resourcesWithoutSlugs(): array
+    {
+        return [
+            'licenses' => [ManageLicenses::class, 'license'],
+            'documentation' => [ManageDocumentations::class, 'documentation'],
+            'certifications' => [ManageCertificates::class, 'certificate'],
+        ];
+    }
+
+    #[DataProvider('resourcesWithoutSlugs')]
+    public function test_separate_resource_forms_create_and_edit_without_slugs_or_type_selection(string $page, string $kind): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $category = CatalogOption::factory()->create(['kind' => 'document']);
+
+        Livewire::test($page)->callAction('create', data: [
+            'title' => 'Simple file', 'catalog_option_id' => $category->id,
+        ])->assertHasNoActionErrors();
+
+        $resource = ResourceItem::where('title', 'Simple file')->firstOrFail();
+        $this->assertSame($kind, $resource->kind);
+        $this->assertNull($resource->slug);
+
+        Livewire::test($page)->callAction(TestAction::make('edit')->table($resource), data: [
+            'title' => 'Updated file',
+        ])->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('resource_items', [
+            'id' => $resource->id, 'title' => 'Updated file', 'kind' => $kind, 'slug' => null,
+        ]);
     }
 
     public function test_cms_edit_changes_what_the_client_sees(): void

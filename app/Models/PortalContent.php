@@ -11,6 +11,13 @@ abstract class PortalContent extends Model
 {
     use HasFactory;
 
+    public const NOTIFICATION_COLORS = [
+        'blue' => 'Blue',
+        'green' => 'Green',
+        'red-orange' => 'Coral',
+        'pink' => 'Pink',
+    ];
+
     protected $guarded = ['id'];
 
     protected $attributes = ['is_published' => false, 'is_demo' => false];
@@ -18,6 +25,13 @@ abstract class PortalContent extends Model
     protected function casts(): array
     {
         return ['is_published' => 'boolean', 'is_demo' => 'boolean'];
+    }
+
+    public function notificationColorClass(): string
+    {
+        $color = array_key_exists($this->color ?? '', self::NOTIFICATION_COLORS) ? $this->color : 'blue';
+
+        return 'text-color-'.$color;
     }
 
     public function company(): BelongsTo

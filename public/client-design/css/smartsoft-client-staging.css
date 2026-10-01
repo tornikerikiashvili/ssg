@@ -1505,6 +1505,14 @@ figcaption {
   position: relative;
 }
 
+.asset-filters .filter_button-label {
+  text-transform: capitalize;
+}
+
+.asset-filters .filter_select-wrapper.is-sort {
+  margin-left: auto;
+}
+
 .section_article-hero {
   background-color: var(--grey-light\<deleted\|variable-ae45c3d4-9e1d-de97-83da-97293be18c6d\>);
   padding-top: 144px;
@@ -2455,6 +2463,10 @@ figcaption {
   position: relative;
 }
 
+.light-mode .notifications_item {
+  color: #666;
+}
+
 .notifications_item-top {
   grid-column-gap: 13px;
   grid-row-gap: 13px;
@@ -3099,15 +3111,19 @@ figcaption {
 }
 
 .assets_item-icon-wrapper {
+  flex: none;
+  align-self: flex-start;
   width: 94px;
   position: relative;
 }
 
 .assets_item-icon {
+  display: block;
   aspect-ratio: 1;
   object-fit: cover;
   border-radius: 8px;
   width: 100%;
+  height: auto;
 }
 
 .assets_item-checkbox {
@@ -4688,10 +4704,10 @@ figcaption {
 
   .assets_item-icon-wrapper {
     width: 55px;
-    position: static;
+    position: relative;
   }
 
-  .assets_item-checkbox, .button_checkbox {
+  .button_checkbox {
     bottom: 10px;
     left: 10px;
   }
@@ -4867,4 +4883,57 @@ figcaption {
   font-weight: 300;
   font-style: italic;
   font-display: swap;
+}
+
+
+.regions-map {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.regions-map [data-country] {
+  stroke: #141414;
+  stroke-width: .65;
+  vector-effect: non-scaling-stroke;
+}
+
+.regions-map [data-country]:hover {
+  stroke: #fff;
+  stroke-width: 1.25;
+}
+
+.regions-map_dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border: 1px solid #8b8d92;
+  border-radius: 50%;
+}
+
+.regions-map_credit {
+  margin: 0;
+  font-size: 12px;
+  color: #a5a5a5;
+}
+
+.regions-map_credit a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+/* Game asset bulk selection uses the same row as category filters. */
+#asset-selection-actions { flex-wrap: wrap; }
+#asset-selection-actions .button_checkbox { position: relative; flex-shrink: 0; }
+#asset-selection-actions .button_checkbox.is-active { background: #f15b4e; border-color: #f15b4e; }
+#asset-selection-actions .button_checkbox.is-active::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
 }

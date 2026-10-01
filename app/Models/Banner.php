@@ -52,6 +52,10 @@ class Banner extends PortalContent
         $target = $this->getAttribute($button.'_target');
         $url = $this->getAttribute($button.'_url');
 
+        if ($button === 'secondary') {
+            return is_string($url) && preg_match('~^https?://~i', $url) && filter_var($url, FILTER_VALIDATE_URL) ? $url : null;
+        }
+
         return match ($target) {
             'game' => $this->game ? route('games.show', $this->game->slug) : null,
             'assets' => $this->game?->release_status === 'released' ? route('games.show', $this->game->slug).'#resources' : null,

@@ -12,7 +12,6 @@ class AnnouncementFactory extends Factory
     {
         return [
             'title' => fake()->sentence(3),
-            'slug' => fake()->unique()->slug(),
             'description' => fake()->paragraph(),
             'is_published' => true,
         ];

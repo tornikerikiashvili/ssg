@@ -113,7 +113,7 @@ class PortalDemoSeeder extends Seeder
                 ['Your onboarding is ready', 'A company-specific demo announcement for Demo Partner.', 'info', $partner->id],
                 ['Europe partner notice', 'Restricted demo announcement for the other company.', 'info', $other->id],
             ] as [$title, $description, $priority, $companyId]) {
-                Announcement::firstOrCreate(['slug' => 'demo-'.Str::slug($title)], [
+                Announcement::firstOrCreate(['title' => $title, 'company_id' => $companyId, 'is_demo' => true], [
                     'title' => $title, 'description' => $description, 'priority' => $priority,
                     'company_id' => $companyId, 'is_published' => true, 'is_demo' => true,
                 ]);

@@ -5,7 +5,7 @@ namespace App\Filament\Resources\Regions;
 use App\Filament\Resources\Regions\Pages\ManageRegions;
 use App\Models\Region;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Select;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -23,7 +23,13 @@ class RegionResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('name')->required()->maxLength(255)->unique(ignoreRecord: true),
+            Select::make('country_code')
+                ->label('Country')
+                ->options(config('map-countries'))
+                ->searchable()
+                ->required()
+                ->in(array_keys(config('map-countries')))
+                ->unique(ignoreRecord: true),
         ]);
     }
 
@@ -31,6 +37,7 @@ class RegionResource extends Resource
     {
         return $table->columns([
             TextColumn::make('name')->searchable()->sortable(),
+            TextColumn::make('country_code')->label('Country code')->placeholder('Not mapped')->searchable()->sortable(),
         ])->recordActions([EditAction::make()])->defaultSort('name');
     }
 

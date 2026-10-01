@@ -23,6 +23,10 @@ class ResourceItem extends PortalContent
 
     public function hasDownloadableFile(): bool
     {
+        if ($this->dropbox_file_id) {
+            return (bool) $this->dropbox_available;
+        }
+
         return array_key_exists($this->file_path ?? '', self::DEMO_FILES)
             || (bool) preg_match('~^(?:game-assets|portal-resources)/[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$~D', $this->file_path ?? '');
     }
@@ -34,8 +38,10 @@ class ResourceItem extends PortalContent
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        return parent::scopeVisibleTo($query, $user)->where(fn (Builder $assets) => $assets
-            ->whereNull('game_id')
-            ->orWhereHas('game', fn (Builder $games) => $games->visibleTo($user)->when(! $user->is_admin, fn (Builder $games) => $games->where('release_status', 'released'))));
+        return parent::scopeVisibleTo($query, $user)
+            ->where(fn (Builder $files) => $files->whereNull('dropbox_file_id')->orWhere('dropbox_available', true))
+            ->where(fn (Builder $assets) => $assets
+                ->whereNull('game_id')
+                ->orWhereHas('game', fn (Builder $games) => $games->visibleTo($user)->when(! $user->is_admin, fn (Builder $games) => $games->where('release_status', 'released'))));
     }
 }

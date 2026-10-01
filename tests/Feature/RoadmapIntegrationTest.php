@@ -92,7 +92,7 @@ class RoadmapIntegrationTest extends TestCase
         Livewire::test(ManageRoadmapItems::class)->callAction('create', data: $data)->assertHasNoActionErrors();
         $this->assertDatabaseHas('roadmap_items', ['game_id' => $game->id, 'progress' => 75, 'target_quarter' => '2027 Q1']);
         Livewire::test(ManageRoadmapItems::class)->callAction('create', data: [...$data, 'slug' => 'invalid-progress', 'progress' => 101])->assertHasActionErrors(['progress']);
-        Livewire::test(ManageAnnouncements::class)->callAction('create', data: ['title' => 'Roadmap notice', 'slug' => 'roadmap-notice', 'priority' => 'info', 'show_on_dashboard' => false, 'show_on_roadmap' => true, 'is_published' => true])->assertHasNoActionErrors();
-        $this->assertDatabaseHas('announcements', ['slug' => 'roadmap-notice', 'show_on_dashboard' => false, 'show_on_roadmap' => true]);
+        Livewire::test(ManageAnnouncements::class)->callAction('create', data: ['title' => 'Roadmap notice', 'priority' => 'info', 'show_on_dashboard' => false, 'show_on_roadmap' => true, 'is_published' => true])->assertHasNoActionErrors();
+        $this->assertDatabaseHas('announcements', ['title' => 'Roadmap notice', 'show_on_dashboard' => false, 'show_on_roadmap' => true]);
     }
 }

@@ -38,10 +38,10 @@ class RegionAccessTest extends TestCase
         Filament::bootCurrentPanel();
     }
 
-    public function test_regions_can_be_created_renamed_and_assigned_through_admin_forms(): void
+    public function test_regions_can_be_created_updated_and_assigned_through_admin_forms(): void
     {
         $this->actingAs(User::factory()->create(['is_admin' => true]));
-        Livewire::test(ManageRegions::class)->callAction('create', data: ['name' => 'Georgia'])->assertHasNoActionErrors();
+        Livewire::test(ManageRegions::class)->callAction('create', data: ['country_code' => 'GE'])->assertHasNoActionErrors();
         $region = Region::where('name', 'Georgia')->firstOrFail();
         $company = Company::factory()->create();
         $user = User::factory()->for($company)->create();
@@ -53,9 +53,9 @@ class RegionAccessTest extends TestCase
         $this->assertSame([$region->id], $user->regions()->pluck('regions.id')->all());
         $availability = GameRegion::factory()->for($region)->create();
 
-        Livewire::test(ManageRegions::class)->callAction(TestAction::make('edit')->table($region), data: ['name' => 'Georgia market'])
+        Livewire::test(ManageRegions::class)->callAction(TestAction::make('edit')->table($region), data: ['country_code' => 'DE'])
             ->assertHasNoActionErrors();
-        $this->actingAs($user)->get('/games/'.$availability->game->slug)->assertOk()->assertSee('Georgia market');
+        $this->actingAs($user)->get('/games/'.$availability->game->slug)->assertOk()->assertSee('Germany');
         $this->get('/admin/regions')->assertForbidden();
     }
 

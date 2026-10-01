@@ -18,6 +18,8 @@ class LicenseResource extends ResourceItemResource
 
     protected static bool $standalone = true;
 
+    protected static bool $requiresSlug = false;
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->where('kind', 'license')->whereNull('game_id');

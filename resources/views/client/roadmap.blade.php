@@ -8,7 +8,7 @@
         <div class="dashboard_info-line"><p>Track upcoming game releases, platform improvements and future product updates</p></div>
     </div>
     @if($pageBanners->isNotEmpty())
-    <div class="dashboard-row">@foreach($pageBanners as $banner)<x-promo-banner :banner="$banner" />@endforeach</div>
+    <div class="dashboard-row">@foreach($pageBanners as $banner)<x-promo-banner :banner="$banner" :game-cover="true" />@endforeach</div>
     @elseif($upcomingItems->isNotEmpty())
     <div class="dashboard-row">
         @foreach($upcomingItems as $upcoming)
@@ -54,9 +54,10 @@
                 <div class="notifications_list">
                     @forelse($announcements as $announcement)
                     <div class="notifications_item">
-                        <div class="notifications_item-top"><p class="text-color-blue text-weight-semibold text-size-medium">{{ $announcement->title }}</p><p>{{ $announcement->created_at->diffForHumans() }}</p></div>
-                        <p class="text-color-text">{{ $announcement->description }}</p>
-                        <div class="notifications_item-line text-color-blue"></div>
+                        <div class="notifications_item-top"><p class="{{ $announcement->notificationColorClass() }} text-weight-semibold text-size-medium">{{ $announcement->title }}</p><p>{{ $announcement->created_at->diffForHumans() }}</p></div>
+                        @if(filled($announcement->teaser))<p class="text-color-text">{{ $announcement->teaser }}</p>@endif
+                        <p>{{ $announcement->description }}</p>
+                        <div class="notifications_item-line {{ $announcement->notificationColorClass() }}"></div>
                     </div>
                     @empty<p>No roadmap announcements available.</p>@endforelse
                 </div>

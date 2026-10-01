@@ -18,6 +18,8 @@ class CertificateResource extends ResourceItemResource
 
     protected static bool $standalone = true;
 
+    protected static bool $requiresSlug = false;
+
     public static function getEloquentQuery(): Builder
     {
         return parent::getEloquentQuery()->where('kind', 'certificate')->whereNull('game_id');

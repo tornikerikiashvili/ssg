@@ -6,10 +6,25 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
-class Game extends PortalContent
+class Game extends PortalContent implements HasMedia
 {
-    protected $with = ['categoryTerm'];
+    use InteractsWithMedia;
+
+    protected $with = ['categoryTerm', 'media'];
+
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('cover')->useDisk('public')
+            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp'])->singleFile();
+    }
+
+    public function getCoverImageUrlAttribute(): ?string
+    {
+        return $this->getFirstMediaUrl('cover') ?: ($this->cover_image ? asset($this->cover_image) : null);
+    }
 
     public const CATEGORIES = ['Crash' => 'Crash', 'Instant' => 'Instant', 'Slot' => 'Slot'];
 
@@ -21,14 +36,66 @@ class Game extends PortalContent
 
     protected function casts(): array
     {
-        return [...parent::casts(), 'rtp' => 'decimal:2', 'release_date' => 'date', 'is_featured' => 'boolean', 'preview_enabled' => 'boolean', 'feature_tags' => 'array', 'specifications' => 'array'];
+        return [...parent::casts(), 'dropbox_synced_at' => 'datetime', 'rtp' => 'decimal:2', 'min_bet' => 'decimal:2', 'max_bet' => 'decimal:2', 'release_date' => 'date', 'is_featured' => 'boolean', 'preview_enabled' => 'boolean', 'feature_tags' => 'array', 'specifications' => 'array'];
+    }
+
+    /** @return array<int, string> */
+    public function getFeatureTagsAttribute(?string $value): array
+    {
+        return collect(json_decode($value ?? '[]', true) ?? [])
+            ->flatMap(fn (string $tag): array => explode(',', $tag))
+            ->map(fn (string $tag): string => trim($tag))
+            ->filter(fn (string $tag): bool => $tag !== '')
+            ->values()->all();
+    }
+
+    /** @return array<int, array{label: string, children: array<int, string>}> */
+    public function getSpecificationsAttribute(?string $value): array
+    {
+        $specifications = json_decode($value ?? '[]', true) ?? [];
+
+        if (array_is_list($specifications)) {
+            return array_map(fn (array $item): array => [
+                'label' => trim($item['label'].' '.($item['value'] ?? '')),
+                'children' => $item['children'] ?? [],
+            ], $specifications);
+        }
+
+        $items = [];
+        foreach ($specifications as $label => $text) {
+            $items[] = ['label' => trim($label.' '.$text), 'children' => []];
+        }
+
+        return $items;
+    }
+
+    public function specificationValue(string $label): ?string
+    {
+        foreach ($this->specifications as $specification) {
+            if (preg_match('/^'.preg_quote($label, '/').'(?:\s*[:–-]\s*|\s+)(.+)$/u', $specification['label'], $matches)) {
+                return $matches[1];
+            }
+        }
+
+        return null;
     }
 
     protected static function booted(): void
     {
         static::saving(function (Game $game): void {
+            if ($game->isDirty('dropbox_folder_path')) {
+                $game->dropbox_folder_path = filled($game->dropbox_folder_path) ? rtrim(trim($game->dropbox_folder_path), '/') : null;
+                $game->dropbox_folder_id = null;
+                $game->dropbox_synced_at = null;
+                $game->dropbox_sync_error = null;
+            }
             if (! $game->category_id) {
                 $game->category_id = CatalogOption::firstOrCreate(['kind' => 'category', 'name' => $game->getAttributes()['category'] ?? 'Crash'])->id;
+            }
+        });
+        static::saved(function (Game $game): void {
+            if ($game->wasChanged('dropbox_folder_path')) {
+                $game->resources()->whereNotNull('dropbox_file_id')->update(['dropbox_available' => false]);
             }
         });
     }

@@ -8,6 +8,7 @@ use App\Models\ResourceItem;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -39,14 +40,18 @@ class ResourceItemResource extends Resource
 
     protected static bool $standalone = false;
 
+    protected static bool $requiresSlug = true;
+
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
             TextInput::make('title')->required()->maxLength(255),
-            TextInput::make('slug')->required()->maxLength(255)->alphaDash()->unique(ignoreRecord: true),
+            ...(static::$requiresSlug ? [TextInput::make('slug')->required()->maxLength(255)->alphaDash()->unique(ignoreRecord: true)] : []),
             Textarea::make('description')->rows(5)->maxLength(20000)->columnSpanFull(),
 
-            Select::make('kind')->label('Resource type')->options(static::getKindOptions())->required()->default(static::$resourceKind ?? 'download')->live(),
+            static::$resourceKind === null
+                ? Select::make('kind')->label('Resource type')->options(static::getKindOptions())->required()->default('download')->live()
+                : Hidden::make('kind')->default(static::$resourceKind)->required()->rules([Rule::in([static::$resourceKind])]),
             ...(static::$standalone ? [] : [
                 Select::make('game_id')->hidden(fn ($livewire) => $livewire instanceof RelationManager)->dehydrated(fn ($livewire) => ! ($livewire instanceof RelationManager))->relationship('game', 'title')->searchable()->preload()->helperText('Linked resources also inherit the game’s visibility.'),
                 Select::make('catalog_option_id')->label('Asset category / document type')->options(fn ($get) => CatalogOption::options($get('kind') === 'documentation' ? 'document' : 'asset'))
@@ -69,7 +74,7 @@ class ResourceItemResource extends Resource
     {
         return $table->columns([
             TextColumn::make('title')->searchable()->sortable()->limit(45),
-            TextColumn::make('kind')->badge(), TextColumn::make('game.title')->placeholder('General')->hidden(static::$standalone),
+            TextColumn::make('kind')->badge()->hidden(static::$resourceKind !== null), TextColumn::make('game.title')->placeholder('General')->hidden(static::$standalone),
             TextColumn::make('company.name')->label('Audience')->placeholder('All partners'),
             TextColumn::make('catalogOption.name')->label('Documentation category')->visible(static::$resourceKind === 'documentation'),
             IconColumn::make('is_published')->label('Published')->boolean(),
@@ -78,7 +83,7 @@ class ResourceItemResource extends Resource
         ])->filters([
             TernaryFilter::make('is_published'),
             SelectFilter::make('company_id')->relationship('company', 'name')->label('Company'),
-            SelectFilter::make('kind')->options(static::getKindOptions()),
+            SelectFilter::make('kind')->options(static::getKindOptions())->hidden(static::$resourceKind !== null),
             SelectFilter::make('catalog_option_id')->label('Documentation category')->options(fn () => CatalogOption::options('document'))->visible(static::$resourceKind === 'documentation'),
         ])->recordActions([EditAction::make(), DeleteAction::make()])
             ->defaultSort('updated_at', 'desc');

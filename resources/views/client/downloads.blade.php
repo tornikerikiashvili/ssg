@@ -24,7 +24,7 @@
         </div>
         <div data-folder-filters style="display:none"><x-asset-filters :categories="$assetCategories" id="download-asset-filters" /></div>
         <div data-assets-main="">
-          <div class="games_list-small">@foreach($resources->getCollection()->groupBy(fn ($resource) => $resource->game_id ?? 'general') as $folderKey => $folderResources)<button aria-controls="resources-{{ $folderKey }}" data-open-folder="resources-{{ $folderKey }}" class="games_item-small"><img src="{{ asset($folderResources->first()->game?->cover_image ?: 'client-design/images/folder.svg') }}" loading="lazy" width="70" height="90" alt="Name" class="dashboard_games-image">
+          <div class="games_list-small">@foreach($resources->getCollection()->groupBy(fn ($resource) => $resource->game_id ?? 'general') as $folderKey => $folderResources)<button aria-controls="resources-{{ $folderKey }}" data-open-folder="resources-{{ $folderKey }}" class="games_item-small"><img src="{{ $folderResources->first()->game?->cover_image_url ?: asset('client-design/images/folder.svg') }}" loading="lazy" width="70" height="90" alt="Name" class="dashboard_games-image">
               <div class="games_item-small-inner">
                 <p class="text-weight-semibold">{{ $folderResources->first()->game?->title ?? 'General resources' }}</p><span class="downloads_info-line">
                   <p class="text-color-red-orange">{{ $folderResources->first()->game?->category ?? 'Documents' }}</p><span class="dot-small"></span>
@@ -41,8 +41,8 @@
             </button>@endforeach</div>@if($resources->isEmpty())<p class="text-color-subtitles">No downloads match your filters.</p>@endif<div class="downloads-pagination"><x-pagination :records="$resources" /></div>
         </div>
         @foreach($resources->getCollection()->groupBy(fn ($resource) => $resource->game_id ?? 'general') as $folderKey => $folderResources)
-<div data-folder="resources-{{ $folderKey }}" class="assests_folder">
-          <div class="assets_folder-header"><img src="{{ asset($folderResources->first()->game?->cover_image ?: 'client-design/images/folder.svg') }}" loading="lazy" width="70" height="90" alt="Name" class="dashboard_games-image is-folder">
+<div data-folder="resources-{{ $folderKey }}" data-dropbox-category-ids="{{ json_encode($folderResources->whereNotNull('dropbox_file_id')->pluck('catalog_option_id')->filter()->unique()->values()->all()) }}" class="assests_folder">
+          <div class="assets_folder-header"><img src="{{ $folderResources->first()->game?->cover_image_url ?: asset('client-design/images/folder.svg') }}" loading="lazy" width="70" height="90" alt="Name" class="dashboard_games-image is-folder">
             <div class="wrapper-vertical-xs text-size-small">
               <p class="text-color-red-orange">{{ $folderResources->first()->game?->category ?? 'Documents' }}</p>
               <p>{{ $folderResources->count() }} Assets</p>
@@ -219,6 +219,10 @@
         currentFolder = document.querySelector('[data-folder="' + this.dataset.openFolder + '"]');
         currentFolder.style.display = 'flex';
         assetFilters.reset();
+        const categoryIds = new Set(JSON.parse(currentFolder.dataset.dropboxCategoryIds).map(String));
+        assetFilters.querySelectorAll('[name="asset_category"]').forEach(input => {
+          input.closest('label').style.display = !input.value || categoryIds.has(input.value) ? '' : 'none';
+        });
         assetFilters.querySelector('[data-accordion-trigger] p').textContent = 'Sort by';
         $('[data-folder-filters]').show();
         filterFolderAssets();

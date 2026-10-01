@@ -20,22 +20,16 @@
               </label>
               @endforeach
             </div>
-            <label>Sort by
-              <select name="sort" class="form_input">
-                <option value="name" @selected(request('sort', 'name') === 'name')>Name</option>
-                <option value="newest" @selected(request('sort') === 'newest')>Newest</option>
-              </select>
-            </label>
-            <button type="submit" class="card-button">Apply filters</button>
+            <x-sort-filter :options="['name' => 'Name', 'newest' => 'Newest']" />
           </form>
         </div>
-        <div class="assets_list">@forelse($resources as $resource)<a href="{{ route('resources.show', $resource->id) }}" class="docs_item w-inline-block">
+        <div class="assets_list">@forelse($resources as $resource)<a href="{{ route('resources.download', $resource->id) }}" class="docs_item w-inline-block">
             <p class="tag">{{ $resource->catalogOption?->name ?? 'Document' }}{{ $resource->is_demo ? ' · Demo' : '' }}</p>
             <div class="wrapper-vertical-xs">
               <p class="text-weight-semibold">{{ $resource->title }}</p>
               <p class="text-size-small">{{ $resource->description }}</p>
             </div><span class="card-button">
-              <p>Open</p>
+              <p>Download</p>
             </span>
           </a>@empty<p>No documents available.</p>@endforelse</div><x-pagination :records="$resources" />
         <div data-collapsing="" class="dashboard-row is-resources">
@@ -55,104 +49,16 @@
             <div>
               <div data-tab-pane="">
                 <div class="notifications_list">
-                  <div class="notifications_item">
-                    <div class="notifications_item-top">
-                      <p class="text-color-blue text-weight-semibold text-size-medium">Documentation</p>
-                      <p>2h ago</p><button type="button" aria-label="Close" data-close-notification="" class="notifications_item-close">
-                        <div class="icon w-embed"><svg width="14" viewbox="0 0 14 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M8.0717 6.49991L11.8224 3.01712L10.7508 2.02203L7.00007 5.50483L3.24944 2.0221L2.17781 3.01719L5.92844 6.49991L2.17773 9.98271L3.24936 10.9778L7.00007 7.495L10.7508 10.9779L11.8225 9.98278L8.0717 6.49991Z"></path>
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                    <p class="text-color-text">REST API v3.2 documentation released</p>
-                    <p>WebSocket support, new RTP endpoints and enhanced reporting now documented.</p>
-                    <div class="notifications_item-line text-color-blue"></div>
-                  </div>
-                  <div class="notifications_item">
-                    <div class="notifications_item-top">
-                      <p class="text-color-green text-weight-semibold text-size-medium">Game Release</p>
-                      <p>1d ago</p><button type="button" aria-label="Close" data-close-notification="" class="notifications_item-close">
-                        <div class="icon w-embed"><svg width="14" viewbox="0 0 14 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M8.0717 6.49991L11.8224 3.01712L10.7508 2.02203L7.00007 5.50483L3.24944 2.0221L2.17781 3.01719L5.92844 6.49991L2.17773 9.98271L3.24936 10.9778L7.00007 7.495L10.7508 10.9779L11.8225 9.98278L8.0717 6.49991Z"></path>
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                    <p class="text-color-text">Crash Duel X is live in Europe</p>
-                    <p>UKGC &amp; MGA certified. Available for immediate integration in 12 markets.</p>
-                    <div class="notifications_item-line text-color-green"></div>
-                  </div>
-                  <div class="notifications_item">
-                    <div class="notifications_item-top">
-                      <p class="text-color-red-orange text-weight-semibold text-size-medium">JetX asset pack updated</p>
-                      <p>2d ago</p><button type="button" aria-label="Close" data-close-notification="" class="notifications_item-close">
-                        <div class="icon w-embed"><svg width="14" viewbox="0 0 14 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M8.0717 6.49991L11.8224 3.01712L10.7508 2.02203L7.00007 5.50483L3.24944 2.0221L2.17781 3.01719L5.92844 6.49991L2.17773 9.98271L3.24936 10.9778L7.00007 7.495L10.7508 10.9779L11.8225 9.98278L8.0717 6.49991Z"></path>
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                    <p>This updated asset pack is designed to elevate your projects with fresh visuals and innovative features.</p>
-                    <div class="notifications_item-line text-color-red-orange"></div>
-                  </div>
-                  <div class="notifications_item">
-                    <div class="notifications_item-top">
-                      <p class="text-color-pink text-weight-semibold text-size-medium">MGA certificate renewed</p>
-                      <p>2d ago</p><button type="button" aria-label="Close" data-close-notification="" class="notifications_item-close">
-                        <div class="icon w-embed"><svg width="14" viewbox="0 0 14 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M8.0717 6.49991L11.8224 3.01712L10.7508 2.02203L7.00007 5.50483L3.24944 2.0221L2.17781 3.01719L5.92844 6.49991L2.17773 9.98271L3.24936 10.9778L7.00007 7.495L10.7508 10.9779L11.8225 9.98278L8.0717 6.49991Z"></path>
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                    <p>Valid until Dec 2026</p>
-                    <div class="notifications_item-line text-color-pink"></div>
-                  </div>
+                  @forelse($notifications as $notification)
+                    <x-notification-card :notification="$notification" />
+                  @empty<p class="text-color-subtitles">No notifications available.</p>@endforelse
                 </div>
               </div>
               <div data-tab-pane="">
                 <div class="notifications_list">
-                  <div class="notifications_item">
-                    <div class="notifications_item-top">
-                      <p class="text-color-green text-weight-semibold text-size-medium">Game Release</p>
-                      <p>1d ago</p><button type="button" aria-label="Close" data-close-notification="" class="notifications_item-close">
-                        <div class="icon w-embed"><svg width="14" viewbox="0 0 14 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M8.0717 6.49991L11.8224 3.01712L10.7508 2.02203L7.00007 5.50483L3.24944 2.0221L2.17781 3.01719L5.92844 6.49991L2.17773 9.98271L3.24936 10.9778L7.00007 7.495L10.7508 10.9779L11.8225 9.98278L8.0717 6.49991Z"></path>
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                    <p class="text-color-text">Crash Duel X is live in Europe</p>
-                    <p>UKGC &amp; MGA certified. Available for immediate integration in 12 markets.</p>
-                    <div class="notifications_item-line text-color-green"></div>
-                  </div>
-                  <div class="notifications_item">
-                    <div class="notifications_item-top">
-                      <p class="text-color-red-orange text-weight-semibold text-size-medium">JetX asset pack updated</p>
-                      <p>2d ago</p><button type="button" aria-label="Close" data-close-notification="" class="notifications_item-close">
-                        <div class="icon w-embed"><svg width="14" viewbox="0 0 14 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M8.0717 6.49991L11.8224 3.01712L10.7508 2.02203L7.00007 5.50483L3.24944 2.0221L2.17781 3.01719L5.92844 6.49991L2.17773 9.98271L3.24936 10.9778L7.00007 7.495L10.7508 10.9779L11.8225 9.98278L8.0717 6.49991Z"></path>
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                    <p>This updated asset pack is designed to elevate your projects with fresh visuals and innovative features.</p>
-                    <div class="notifications_item-line text-color-red-orange"></div>
-                  </div>
-                  <div class="notifications_item">
-                    <div class="notifications_item-top">
-                      <p class="text-color-pink text-weight-semibold text-size-medium">MGA certificate renewed</p>
-                      <p>2d ago</p><button type="button" aria-label="Close" data-close-notification="" class="notifications_item-close">
-                        <div class="icon w-embed"><svg width="14" viewbox="0 0 14 13" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M8.0717 6.49991L11.8224 3.01712L10.7508 2.02203L7.00007 5.50483L3.24944 2.0221L2.17781 3.01719L5.92844 6.49991L2.17773 9.98271L3.24936 10.9778L7.00007 7.495L10.7508 10.9779L11.8225 9.98278L8.0717 6.49991Z"></path>
-                          </svg>
-                        </div>
-                      </button>
-                    </div>
-                    <p>Valid until Dec 2026</p>
-                    <div class="notifications_item-line text-color-pink"></div>
-                  </div>
+                  @forelse($announcements as $announcement)
+                    <x-notification-card :notification="$announcement" :description-limit="160" />
+                  @empty<p class="text-color-subtitles">No announcements available.</p>@endforelse
                 </div>
               </div>
             </div>
@@ -244,7 +150,7 @@
 
 @push('scripts')
 <script>
-    document.querySelectorAll('#documentation-filter input[type="radio"], #documentation-filter select').forEach(input => {
+    document.querySelectorAll('#documentation-filter input[type="radio"]').forEach(input => {
         input.addEventListener('change', () => input.form.requestSubmit());
     });
 </script>

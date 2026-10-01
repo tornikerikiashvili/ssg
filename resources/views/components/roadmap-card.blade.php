@@ -1,7 +1,7 @@
 @props(['item', 'openableGameIds'])
 <div class="timeline_item">
     <div class="timeline_item-wrapper">
-        @if($item->game?->cover_image)<img src="{{ asset($item->game->cover_image) }}" loading="lazy" width="70" height="90" alt="{{ $item->game->title }}" class="dashboard_games-image is-timeline" style="width:55px;height:72px;object-fit:cover;align-self:flex-start;flex-shrink:0">@endif
+        @if($item->game?->cover_image_url)<img src="{{ $item->game->cover_image_url }}" loading="lazy" width="70" height="90" alt="{{ $item->game->title }}" class="dashboard_games-image is-timeline" style="width:55px;height:72px;object-fit:cover;align-self:flex-start;flex-shrink:0">@endif
         <div class="timeline_item-inner">
             <p class="tag {{ $item->status === 'released' ? '' : ($item->status === 'in_progress' ? 'is-red' : 'is-blue') }}">{{ \App\Models\RoadmapItem::STATUSES[$item->status] ?? $item->status }}</p>
             <div class="wrapper-vertical-xs">

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Filament\Resources\GameCategories\Pages\ManageGameCategories;
+use App\Filament\Resources\Games\Pages\CreateGame;
 use App\Filament\Resources\Games\Pages\EditGame;
 use App\Filament\Resources\Games\RelationManagers\ResourcesRelationManager;
 use App\Filament\Resources\GameTypes\Pages\ManageGameTypes;
@@ -48,6 +49,87 @@ class GameCatalogTest extends TestCase
     private function partner(): User
     {
         return User::factory()->for(Company::factory())->create();
+    }
+
+    public function test_admin_can_upload_replace_and_remove_a_game_cover(): void
+    {
+        Storage::fake('public');
+        $game = Game::factory()->create(['cover_image' => 'brand/demo/game-1.jpg']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+
+        Livewire::test(EditGame::class, ['record' => $game->id])
+            ->fillForm(['cover' => UploadedFile::fake()->image('cover.webp')])
+            ->call('save')->assertHasNoFormErrors();
+
+        $cover = $game->fresh()->getFirstMedia('cover');
+        $this->assertNotNull($cover);
+        $this->assertSame('public', $cover->disk);
+        Storage::disk('public')->assertExists($cover->getPathRelativeToRoot());
+        $this->assertSame($cover->getUrl(), $game->fresh()->cover_image_url);
+
+        Livewire::test(EditGame::class, ['record' => $game->id])
+            ->fillForm(['cover' => UploadedFile::fake()->image('replacement.png')])
+            ->call('save')->assertHasNoFormErrors();
+
+        $replacement = $game->fresh()->getFirstMedia('cover');
+        $this->assertNotSame($cover->id, $replacement->id);
+        $this->assertCount(1, $game->fresh()->getMedia('cover'));
+        Storage::disk('public')->assertMissing($cover->getPathRelativeToRoot());
+
+        Livewire::test(EditGame::class, ['record' => $game->id])
+            ->fillForm(['cover' => []])->call('save')->assertHasNoFormErrors();
+
+        $this->assertCount(0, $game->fresh()->getMedia('cover'));
+        Storage::disk('public')->assertMissing($replacement->getPathRelativeToRoot());
+        $this->assertSame(asset('brand/demo/game-1.jpg'), $game->fresh()->cover_image_url);
+    }
+
+    public function test_admin_can_upload_a_cover_when_creating_a_game(): void
+    {
+        Storage::fake('public');
+        $category = CatalogOption::factory()->create(['kind' => 'category']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+
+        Livewire::test(CreateGame::class)->fillForm([
+            'title' => 'Game with cover', 'slug' => 'game-with-cover', 'category_id' => $category->id,
+            'cover' => UploadedFile::fake()->image('new-cover.png'),
+        ])->call('create')->assertHasNoFormErrors();
+
+        $game = Game::where('slug', 'game-with-cover')->firstOrFail();
+        $cover = $game->getFirstMedia('cover');
+        $this->assertNotNull($cover);
+        Storage::disk('public')->assertExists($cover->getPathRelativeToRoot());
+    }
+
+    public function test_game_cover_upload_rejects_non_images_and_oversized_images(): void
+    {
+        Storage::fake('public');
+        $game = Game::factory()->create();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+
+        Livewire::test(EditGame::class, ['record' => $game->id])
+            ->fillForm(['cover' => UploadedFile::fake()->create('document.pdf', 10, 'application/pdf')])
+            ->call('save')->assertHasFormErrors(['cover']);
+        Livewire::test(EditGame::class, ['record' => $game->id])
+            ->fillForm(['cover' => UploadedFile::fake()->image('large.jpg')->size(5121)])
+            ->call('save')->assertHasFormErrors(['cover']);
+
+        $this->assertCount(0, $game->fresh()->getMedia('cover'));
+    }
+
+    public function test_uploaded_covers_render_without_a_dropbox_token(): void
+    {
+        Storage::fake('public');
+        config(['services.dropbox.access_token' => null]);
+        $game = Game::factory()->create(['is_featured' => true]);
+        $cover = $game->addMedia(UploadedFile::fake()->image('cover.jpg'))->toMediaCollection('cover');
+        ResourceItem::factory()->for($game)->create(['kind' => 'download']);
+        $this->actingAs($this->partner());
+
+        $this->get('/games')->assertOk()->assertSee($cover->getUrl());
+        $this->get('/games/'.$game->slug)->assertOk()->assertSee($cover->getUrl());
+        $this->get('/dashboard')->assertOk()->assertSee($cover->getUrl());
+        $this->get('/resources/download')->assertOk()->assertSee($cover->getUrl());
     }
 
     public function test_admin_can_create_and_rename_categories_without_losing_game_assignments(): void
@@ -109,7 +191,7 @@ class GameCatalogTest extends TestCase
         $this->get('/admin/games/'.$game->id.'/edit')->assertOk();
         Livewire::test(EditGame::class, ['record' => $game->id])->fillForm([
             'features' => 'Game features from CMS', 'feature_tags' => ['Multiplayer'], 'rules' => 'Game rules from CMS',
-            'specifications' => ['Languages' => '22'], 'regionAvailabilities' => [['region_id' => $region->id, 'status' => 'available']], 'game_type_id' => $type->id,
+            'specifications' => [['label' => 'Languages 22', 'children' => []]], 'regionAvailabilities' => [['region_id' => $region->id, 'status' => 'available']], 'game_type_id' => $type->id,
         ])->call('save')->assertHasNoFormErrors();
         $this->assertSame('Game features from CMS', $game->fresh()->features);
         Livewire::test(EditGame::class, ['record' => $game->id])->fillForm(['category_id' => $type->id])->call('save')->assertHasFormErrors(['category_id']);
@@ -117,6 +199,147 @@ class GameCatalogTest extends TestCase
         $partner->company->regions()->attach($region);
         $this->actingAs($partner)->get('/games/'.$game->slug)->assertOk()->assertSee('Game features from CMS')->assertSee('Game rules from CMS')->assertSee('Georgia');
         $this->get('/admin/games/'.$game->id.'/edit')->assertForbidden();
+    }
+
+    public function test_game_summary_fields_save_and_render_independently_of_specifications(): void
+    {
+        $game = Game::factory()->create();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Livewire::test(EditGame::class, ['record' => $game->id])->fillForm([
+            'min_bet' => '0.25', 'max_bet' => '500.50', 'languages' => 'English, Georgian', 'certifications' => 'GLI, BMM, MGA',
+        ])->call('save')->assertHasNoFormErrors();
+        $this->assertSame('0.25', $game->fresh()->min_bet);
+        $this->assertSame('500.50', $game->fresh()->max_bet);
+        $this->assertSame('GLI, BMM, MGA', $game->fresh()->certifications);
+        $this->actingAs($this->partner())->get('/games/'.$game->slug)->assertOk()
+            ->assertSee('0.25')->assertSee('500.50')->assertSee('English, Georgian')->assertSee('GLI, BMM, MGA')->assertSee('Min Bet')->assertDontSee('Mix Bet');
+    }
+
+    /** @return array<string, array{bool, string}> */
+    public static function gameTitleTagStates(): array
+    {
+        return [
+            'released' => [false, 'released'],
+            'featured' => [true, 'released'],
+            'upcoming' => [false, 'upcoming'],
+            'featured upcoming' => [true, 'upcoming'],
+        ];
+    }
+
+    #[DataProvider('gameTitleTagStates')]
+    public function test_game_title_tags_follow_featured_and_release_status(bool $featured, string $status): void
+    {
+        $game = Game::factory()->create(['is_demo' => true, 'is_featured' => $featured, 'release_status' => $status, 'preview_enabled' => true]);
+        $response = $this->actingAs($this->partner())->get('/games/'.$game->slug)->assertOk()
+            ->assertSee('<p class="tag">'.$game->category.'</p>', false)
+            ->assertDontSee('<p class="tag is-red">Demo</p>', false);
+        if ($featured) {
+            $response->assertSee('<p class="tag is-red">Featured</p>', false);
+        } else {
+            $response->assertDontSee('<p class="tag is-red">Featured</p>', false);
+        }
+        if ($status === 'upcoming') {
+            $response->assertSee('<p class="tag is-blue">Upcoming</p>', false);
+        } else {
+            $response->assertDontSee('<p class="tag is-blue">Upcoming</p>', false);
+        }
+    }
+
+    public function test_demo_link_can_be_saved_displayed_and_removed(): void
+    {
+        $game = Game::factory()->create();
+        $admin = User::factory()->create(['is_admin' => true]);
+        $this->actingAs($admin);
+        Livewire::test(EditGame::class, ['record' => $game->id])->fillForm(['demo_url' => 'https://example.com/play?game=demo'])
+            ->call('save')->assertHasNoFormErrors();
+        $this->assertSame('https://example.com/play?game=demo', $game->fresh()->demo_url);
+        $this->actingAs($this->partner())->get('/games/'.$game->slug)->assertOk()
+            ->assertSee('href="https://example.com/play?game=demo" target="_blank" rel="noopener noreferrer"', false)->assertSee('Play Demo');
+        $this->actingAs($admin);
+        Livewire::test(EditGame::class, ['record' => $game->id])->fillForm(['demo_url' => 'javascript:alert(1)'])
+            ->call('save')->assertHasFormErrors(['demo_url']);
+        Livewire::test(EditGame::class, ['record' => $game->id])->fillForm(['demo_url' => ''])
+            ->call('save')->assertHasNoFormErrors();
+        $this->get('/games/'.$game->slug)->assertOk()->assertDontSee('Play Demo');
+    }
+
+    public function test_game_assets_start_with_selection_instructions_and_hidden_bulk_actions(): void
+    {
+        $game = Game::factory()->create();
+        ResourceItem::factory()->for($game)->create(['kind' => 'download', 'file_path' => 'demo/marketing-pack.txt']);
+        $this->actingAs($this->partner())->get('/games/'.$game->slug)->assertOk()
+            ->assertSee('To select multiple options, please click on the multiplier cards.')
+            ->assertSee('id="asset-selection-hint" class="tag" role="status"', false)
+            ->assertSee('id="asset-archive" hidden style="display:none"', false)
+            ->assertSee('id="asset-selection-actions" class="buttons" hidden style="display:none"', false)
+            ->assertSee('type="submit" form="asset-archive"', false);
+    }
+
+    public function test_game_summary_fields_reject_invalid_bet_limits(): void
+    {
+        $game = Game::factory()->create();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Livewire::test(EditGame::class, ['record' => $game->id])->fillForm(['min_bet' => -1, 'max_bet' => -1])
+            ->call('save')->assertHasFormErrors(['min_bet', 'max_bet']);
+        Livewire::test(EditGame::class, ['record' => $game->id])->fillForm(['min_bet' => 10, 'max_bet' => 5])
+            ->call('save')->assertHasFormErrors(['max_bet']);
+    }
+
+    public function test_game_specifications_support_multiple_child_points_and_escape_content(): void
+    {
+        $game = Game::factory()->create();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Livewire::test(EditGame::class, ['record' => $game->id])->fillForm([
+            'specifications' => [
+                ['label' => 'Bet Placement', 'children' => [['text' => 'Manual or auto-bet options.'], ['text' => 'Two independent bets.'], ['text' => '<script>alert(1)</script>']]],
+                ['label' => 'Languages 22', 'children' => []],
+            ],
+        ])->call('save')->assertHasNoFormErrors();
+        $saved = $game->fresh();
+        $this->assertSame(['Manual or auto-bet options.', 'Two independent bets.', '<script>alert(1)</script>'], $saved->specifications[0]['children']);
+        $this->assertSame('22', $saved->specificationValue('Languages'));
+        Livewire::test(EditGame::class, ['record' => $game->id])->call('save')->assertHasNoFormErrors();
+        $this->assertSame($saved->specifications, $game->fresh()->specifications);
+        $this->actingAs($this->partner())->get('/games/'.$game->slug)->assertOk()
+            ->assertSeeInOrder(['Bet Placement', 'Manual or auto-bet options.', 'Two independent bets.'])
+            ->assertSee('class="specifications_list-item-sublevel"', false)
+            ->assertDontSee('Bet Placement:')
+            ->assertSee('&lt;script&gt;alert(1)&lt;/script&gt;', false)->assertDontSee('<script>alert(1)</script>', false);
+    }
+
+    public function test_comma_separated_feature_tags_render_as_separate_colored_tags(): void
+    {
+        $game = Game::factory()->create(['feature_tags' => ['Tag 1, Tag 2, Tag 3']]);
+        $this->assertSame(['Tag 1', 'Tag 2', 'Tag 3'], $game->feature_tags);
+        $this->actingAs($this->partner())->get('/games/'.$game->slug)->assertOk()
+            ->assertSee('<p class="tag">Tag 1</p>', false)
+            ->assertSee('<p class="tag is-red">Tag 2</p>', false)
+            ->assertSee('<p class="tag is-blue">Tag 3</p>', false)
+            ->assertDontSee('Tag 1, Tag 2, Tag 3');
+    }
+
+    public function test_previous_specification_text_is_preserved_in_the_heading(): void
+    {
+        $game = Game::factory()->create(['specifications' => [
+            ['label' => 'Payout', 'value' => 'Multiplier × Bet', 'children' => ['Example payout']],
+        ]]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Livewire::test(EditGame::class, ['record' => $game->id])->call('save')->assertHasNoFormErrors();
+        $this->assertSame([['label' => 'Payout Multiplier × Bet', 'children' => ['Example payout']]], $game->fresh()->specifications);
+    }
+
+    public function test_legacy_game_specifications_survive_loading_and_saving_the_editor(): void
+    {
+        $game = Game::factory()->create(['specifications' => ['Max bet' => '100', 'Min bet' => '1', 'Languages' => '22']]);
+        $this->assertSame('100', $game->specificationValue('Max bet'));
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Livewire::test(EditGame::class, ['record' => $game->id])->call('save')->assertHasNoFormErrors();
+        $saved = $game->fresh();
+        $this->assertCount(3, $saved->specifications);
+        $this->assertSame('100', $saved->specificationValue('Max bet'));
+        $this->assertSame('1', $saved->specificationValue('Min bet'));
+        $this->assertSame('22', $saved->specificationValue('Languages'));
+        $this->actingAs($this->partner())->get('/games/'.$game->slug)->assertOk()->assertSee('Max bet 100');
     }
 
     public function test_filters_and_sorting_use_dynamic_options_and_preserve_company_scope(): void
@@ -184,7 +407,8 @@ class GameCatalogTest extends TestCase
             'title' => 'Uploaded guide', 'slug' => 'uploaded-guide', 'kind' => 'documentation', 'catalog_option_id' => $category->id,
             'is_published' => true, 'file_path' => UploadedFile::fake()->create('guide.pdf', 10, 'application/pdf'),
         ])->assertHasNoActionErrors();
-        $resource = ResourceItem::where('slug', 'uploaded-guide')->firstOrFail();
+        $resource = $document->fresh();
+        $this->assertSame('Uploaded guide', $resource->title);
         $this->assertSame($game->id, $resource->game_id);
         $this->assertTrue($resource->hasDownloadableFile());
         Storage::disk('local')->assertExists($resource->file_path);

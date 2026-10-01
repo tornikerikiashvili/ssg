@@ -22,7 +22,7 @@
         <div data-collapsing="" class="games_list">
           @forelse($games as $game)
           <div class="games_item">
-            <a href="{{ route('games.show', $game->slug) }}" class="w-inline-block"><img src="{{ asset($game->cover_image ?: 'client-design/images/game-3.png') }}" loading="lazy" width="282" height="347" alt="{{ $game->title }}" class="games_item-image"></a>
+            <a href="{{ route('games.show', $game->slug) }}" class="w-inline-block"><img src="{{ $game->cover_image_url ?: asset('client-design/images/game-3.png') }}" loading="lazy" width="282" height="347" alt="{{ $game->title }}" class="games_item-image"></a>
             <a href="{{ route('games.show', $game->slug) }}" class="games_item-info-block w-inline-block">
               <div class="games_item-info-col">
                 <h2>{{ $game->title }}</h2>
@@ -61,7 +61,7 @@
           <p>Featured games matching your current filters.</p>
         </div>
         
-        <div data-collapsing class="games_list">@forelse($games->where('is_featured', true) as $game)<div class="games_item"><img src="{{ asset($game->cover_image ?: 'client-design/images/Logo-icon.svg') }}" loading="lazy" width="282" height="347" alt="Cover" class="games_item-image">
+        <div data-collapsing class="games_list">@forelse($games->where('is_featured', true) as $game)<div class="games_item"><img src="{{ $game->cover_image_url ?: asset('client-design/images/Logo-icon.svg') }}" loading="lazy" width="282" height="347" alt="Cover" class="games_item-image">
             <div class="games_item-info-block">
               <div class="games_item-info-col">
                 <h2>{{ $game->title }}</h2>

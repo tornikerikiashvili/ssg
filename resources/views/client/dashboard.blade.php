@@ -24,7 +24,7 @@
 @endforeach
 </div>
         <div class="dashboard-row">
-          @if($pageBanners->isNotEmpty())<div class="wrapper-vertical-l">@foreach($pageBanners as $banner)<x-promo-banner :banner="$banner" />@endforeach</div>@else
+          @if($pageBanners->isNotEmpty())<x-promo-banner :banner="$pageBanners->first()" />@else
 @if($featuredGame)<div class="banner">
             <p class="banner_category">Featured Game</p>
             <div class="banner_inner">
@@ -59,7 +59,7 @@
                 <p class="button_text">Game Assets</p>
               </a>
             </div>
-            <div class="banner_image-wrapper">@if($featuredGame->cover_image)<img src="{{ asset($featuredGame->cover_image) }}" alt="{{ $featuredGame->title }}" class="fullsize-img">@endif</div>
+            <div class="banner_image-wrapper">@if($featuredGame->cover_image_url)<img src="{{ $featuredGame->cover_image_url }}" alt="{{ $featuredGame->title }}" class="fullsize-img">@endif</div>
           </div>@else<div class="banner"><p class="banner_category">Featured Game</p><p class="banner_title">No featured games yet</p></div>@endif
           @endif
           <div class="dashboard_banner-block">
@@ -67,7 +67,7 @@
               <div no-scrollbar="" class="dashboard_block-header-wrapper">
                 <div class="dashboard_block-header">
                   <a href="#" class="tab-link is-active w-inline-block">
-                    <p>New Resources</p>
+                    <p>Notifications</p>
                     <div class="tab-link_line"></div>
                   </a>
                   <a href="#" class="tab-link w-inline-block">
@@ -78,13 +78,21 @@
               </div>
               <div>
                 <div data-tab-pane="">
-                  <div class="notifications_list">@forelse($newResources as $resource)
-<div class="notifications_item"><div class="notifications_item-top"><p class="text-color-blue text-weight-semibold">{{ \App\Models\ResourceItem::KINDS[$resource->kind] ?? 'Resource' }}</p><p>{{ $resource->created_at->diffForHumans() }}</p></div><a href="{{ route('resources.show', $resource->id) }}" class="text-color-text">{{ $resource->title }}</a><p>{{ \Illuminate\Support\Str::limit($resource->description, 140) }}</p><div class="notifications_item-line text-color-blue"></div></div>
-@empty<p class="text-color-subtitles">No new resources available.</p>@endforelse</div>
+                  <div class="notifications_list">@forelse($notifications as $notification)
+                    <x-notification-card :notification="$notification" />
+@empty<p class="text-color-subtitles">No notifications available.</p>@endforelse</div>
                 </div>
                 <div data-tab-pane="">
                   <div class="notifications_list">@forelse($announcements as $announcement)
-<div class="notifications_item"><div class="notifications_item-top"><p class="text-color-red-orange text-weight-semibold">{{ $announcement->title }}</p><p>{{ $announcement->created_at->diffForHumans() }}</p></div><p>{{ \Illuminate\Support\Str::limit($announcement->description, 160) }}</p><div class="notifications_item-line text-color-red-orange"></div></div>
+                    <div class="notifications_item">
+                      <div class="notifications_item-top">
+                        <p class="{{ $announcement->notificationColorClass() }} text-weight-semibold text-size-medium">{{ $announcement->title }}</p>
+                        <p>{{ $announcement->created_at->diffForHumans() }}</p>
+                      </div>
+                      @if(filled($announcement->teaser))<p class="text-color-text">{{ $announcement->teaser }}</p>@endif
+                      <p>{{ \Illuminate\Support\Str::limit($announcement->description, 160) }}</p>
+                      <div class="notifications_item-line {{ $announcement->notificationColorClass() }}"></div>
+                    </div>
 @empty<p class="text-color-subtitles">No announcements available.</p>@endforelse</div>
                 </div>
               </div>
@@ -125,7 +133,7 @@
               </a>
             </div>
             <p class="text-color-subtitles">Total {{ $gameCount }} Games.</p>
-            <div class="dashboard_games-list">@forelse($games as $game)<div class="dashboard_games-item"><img src="{{ asset($game->cover_image ?: 'client-design/images/Logo-icon.svg') }}" loading="lazy" width="70" height="90" alt="{{ $game->title }}" class="dashboard_games-image">
+            <div class="dashboard_games-list">@forelse($games as $game)<div class="dashboard_games-item"><img src="{{ $game->cover_image_url ?: asset('client-design/images/Logo-icon.svg') }}" loading="lazy" width="70" height="90" alt="{{ $game->title }}" class="dashboard_games-image">
                 <div class="dashboard_games-item-inner">
                   <div>
                     <p class="text-size-large">{{ $game->title }}</p>
@@ -162,7 +170,7 @@
               </a>
             </div>
             <p class="text-color-subtitles">Total {{ $featuredCount }} Featured.</p>
-            <div class="dashboard_games-list">@forelse($featuredGames as $game)<div class="dashboard_games-item"><img src="{{ asset($game->cover_image ?: 'client-design/images/Logo-icon.svg') }}" loading="lazy" width="70" height="90" alt="{{ $game->title }}" class="dashboard_games-image">
+            <div class="dashboard_games-list">@forelse($featuredGames as $game)<div class="dashboard_games-item"><img src="{{ $game->cover_image_url ?: asset('client-design/images/Logo-icon.svg') }}" loading="lazy" width="70" height="90" alt="{{ $game->title }}" class="dashboard_games-image">
                 <div class="dashboard_games-item-inner">
                   <div>
                     <p class="text-size-large">{{ $game->title }}</p>
