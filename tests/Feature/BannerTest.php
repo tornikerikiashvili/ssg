@@ -7,6 +7,7 @@ use App\Filament\Resources\Banners\Pages\EditBanner;
 use App\Models\Banner;
 use App\Models\Company;
 use App\Models\Game;
+use App\Models\GameRegion;
 use App\Models\User;
 use Dom\HTMLDocument;
 use Filament\Facades\Filament;
@@ -29,21 +30,22 @@ class BannerTest extends TestCase
         }
     }
 
-    public function test_banners_obey_page_order_publication_and_company_and_game_access(): void
+    public function test_banners_obey_page_order_publication_and_game_access_without_company_restrictions(): void
     {
         $user = User::factory()->for(Company::factory())->create();
         Banner::factory()->create(['title' => 'Second banner', 'sort_order' => 20, 'pages' => ['dashboard', 'roadmap']]);
         Banner::factory()->create(['title' => 'First banner', 'sort_order' => 10, 'pages' => ['dashboard', 'roadmap']]);
         Banner::factory()->create(['title' => 'Games only', 'pages' => ['games']]);
         Banner::factory()->create(['title' => 'Draft banner', 'is_published' => false]);
-        Banner::factory()->for(Company::factory())->create(['title' => 'Private banner']);
+        Banner::factory()->for(Company::factory())->create(['title' => 'Legacy audience banner', 'sort_order' => 30, 'pages' => ['dashboard', 'roadmap']]);
         $privateGame = Game::factory()->for(Company::factory())->create();
+        GameRegion::factory()->for($privateGame)->create();
         Banner::factory()->create(['title' => 'Private game banner', 'game_id' => $privateGame->id]);
-        $response = $this->actingAs($user)->get('/dashboard')->assertOk()->assertSee('First banner')->assertDontSee('Second banner')->assertDontSee('Games only')->assertDontSee('Draft banner')->assertDontSee('Private banner')->assertDontSee('Private game banner');
+        $response = $this->actingAs($user)->get('/dashboard')->assertOk()->assertSee('First banner')->assertDontSee('Second banner')->assertDontSee('Games only')->assertDontSee('Draft banner')->assertDontSee('Legacy audience banner')->assertDontSee('Private game banner');
         $document = HTMLDocument::createFromString($response->getContent(), LIBXML_NOERROR);
         $this->assertCount(1, $document->querySelectorAll('.dashboard-row > .banner[data-cms-banner]'));
         $this->assertCount(1, $document->querySelectorAll('[data-cms-banner]'));
-        $this->get('/roadmap')->assertOk()->assertSeeInOrder(['First banner', 'Second banner']);
+        $this->get('/roadmap')->assertOk()->assertSeeInOrder(['First banner', 'Second banner', 'Legacy audience banner']);
         $this->get('/games')->assertOk()->assertSee('Games only')->assertDontSee('First banner');
         $this->get('/admin/banners')->assertForbidden();
     }
@@ -91,7 +93,7 @@ class BannerTest extends TestCase
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $data = ['title' => 'CMS banner', 'variant' => 'blue', 'pages' => ['games', 'roadmap'], 'sort_order' => 5, 'primary_target' => 'url', 'primary_label' => 'Explore', 'primary_url' => 'https://example.com', 'secondary_target' => 'none', 'is_published' => true];
         $this->get('/admin/banners/create')->assertOk();
-        Livewire::test(CreateBanner::class)->fillForm($data)->call('create')->assertHasNoFormErrors();
+        Livewire::test(CreateBanner::class)->assertFormFieldDoesNotExist('company_id')->fillForm($data)->call('create')->assertHasNoFormErrors();
         $this->assertDatabaseHas('banners', ['title' => 'CMS banner', 'variant' => 'blue']);
         Livewire::test(CreateBanner::class)->fillForm([...$data, 'primary_url' => 'javascript:alert(1)'])->call('create')->assertHasFormErrors(['primary_url']);
         Livewire::test(CreateBanner::class)->fillForm([...$data, 'pages' => []])->call('create')->assertHasFormErrors(['pages']);

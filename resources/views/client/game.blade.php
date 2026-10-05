@@ -65,13 +65,15 @@
                 <p class="button_text">Play Demo</p>
               </a>
               @endif
-              <a href="#resources" class="button w-inline-block">
+              @if($game->canAccessAssets(auth()->user()))
+<a href="#resources" class="button w-inline-block">
                 <p class="button_text">Download Assets</p>
                 <div class="button_icon w-embed"><svg width="24" viewbox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                     <path fill-rule="evenodd" clip-rule="evenodd" d="M8.78851 10.1296C8.36291 10.4538 8.14928 11.0364 8.36978 11.6141C8.62731 12.2887 9.13324 12.9087 9.69911 13.3884C10.2713 13.8734 10.9872 14.2856 11.7481 14.4758C11.9135 14.5171 12.0865 14.5171 12.252 14.4758C13.0128 14.2856 13.7287 13.8734 14.3009 13.3884C14.8668 12.9087 15.3727 12.2887 15.6302 11.6141C15.8507 11.0364 15.6371 10.4538 15.2115 10.1296C14.8276 9.83731 14.3216 9.77996 13.8829 9.94842C13.6379 10.0426 13.3312 10.1448 13.0003 10.2227V6.02539C13.0003 5.47311 12.5526 5.02539 12.0003 5.02539C11.4481 5.02539 11.0003 5.47311 11.0003 6.02539V10.2229C10.6693 10.1449 10.3623 10.0426 10.1171 9.94842C9.67844 9.77995 9.17236 9.83731 8.78851 10.1296ZM6.99902 15.4732C6.99902 14.9209 6.55131 14.4732 5.99902 14.4732C5.44674 14.4732 4.99902 14.9209 4.99902 15.4732V16.307C4.99902 17.0493 5.32639 17.7378 5.86955 18.2284C6.40934 18.716 7.12154 18.9748 7.84547 18.9748H16.1545C16.8784 18.9748 17.5906 18.716 18.1304 18.2284C18.6736 17.7378 19.0009 17.0493 19.0009 16.307V15.4732C19.0009 14.9209 18.5532 14.4732 18.0009 14.4732C17.4486 14.4732 17.0009 14.9209 17.0009 15.4732V16.307C17.0009 16.4494 16.9392 16.6093 16.7898 16.7442C16.6371 16.8822 16.41 16.9748 16.1545 16.9748H7.84547C7.58998 16.9748 7.36288 16.8822 7.21012 16.7442C7.06073 16.6093 6.99902 16.4494 6.99902 16.307V15.4732Z"></path>
                   </svg>
                 </div>
               </a>
+              @endif
             </div>
           </div>
           <div class="games-inner_hero-img-wrapper"><img src="{{ $game->cover_image_url ?: asset('client-design/images/game-1.jpg') }}" loading="lazy" width="299" height="374" alt="Image" class="games-inner_hero-img"></div>
@@ -132,7 +134,7 @@
                   <div class="tab-link_line"></div>
                 </a>
               </div>
-              <div class="game-engagement-tools_list">@forelse($tools as $tool)<a class="game-engagement-tools_item" href="{{ route('tools.index') }}"><img src="{{ asset('client-design/images/tool-1.png') }}" width="52" height="54" alt=""><p>{{ $tool->title }}</p></a>@empty<p>No engagement tools assigned.</p>@endforelse</div>
+              <div class="game-engagement-tools_list">@forelse($tools as $tool)<a class="game-engagement-tools_item" href="{{ route('tools.index') }}"><img src="{{ $tool->coverImageUrl() ?? asset('client-design/images/tool-1.png') }}" width="52" height="54" alt=""><p>{{ $tool->title }}</p></a>@empty<p>No engagement tools assigned.</p>@endforelse</div>
             </div>
           </div>
           <div class="dashboard_block is-dark">
@@ -146,6 +148,7 @@
             <div class="wrapper-vertical-l">@forelse($game->regionAvailabilities as $availability)<div class="map_info-item"><div class="{{ ['available' => 'blue-dot', 'limited' => 'red-dot', 'unavailable' => 'grey-dot'][$availability->status] ?? 'grey-dot' }}"></div><p>{{ $availability->region->name }} — {{ \App\Models\GameRegion::STATUSES[$availability->status] ?? 'Not specified' }}</p></div>@empty<p class="text-color-subtitles">Available in all regions.</p>@endforelse</div>
           </div>
         </div>
+        @if($game->canAccessAssets(auth()->user()))
         <div class="dashboard_block is-dark" id="resources">
           <div class="dashboard_block-header"><a class="tab-link is-active"><p>Game Assets</p><div class="tab-link_line"></div></a></div>
           <x-asset-filters :categories="$assetCategories">
@@ -163,6 +166,7 @@
           <x-original-assets :resources="$resources" />
           <p id="asset-filter-empty" class="text-color-subtitles" role="status" hidden>No assets match this category.</p>
         </div>
+        @endif
         <div class="dashboard_block is-dark">
           <div no-scrollbar="" class="dashboard_block-header">
             <a href="#" class="tab-link is-active w-inline-block">
@@ -170,15 +174,7 @@
               <div class="tab-link_line"></div>
             </a>
           </div>
-          <div class="assets_list">@forelse($documents as $document)<a href="{{ route('resources.download', $document->id) }}" class="docs_item w-inline-block">
-              <p class="tag">{{ $document->catalogOption?->name ?? 'Document' }}</p>
-              <div class="wrapper-vertical-xs">
-                <p class="text-weight-semibold">{{ $document->title }}</p>
-                <p class="text-size-small">{{ $document->description }}</p>
-              </div><span class="card-button">
-                <p>Download</p>
-              </span>
-            </a>@empty<p>No documents assigned.</p>@endforelse</div>
+          <div class="assets_list">@forelse($documents as $document)<x-documentation-card :document="$document" />@empty<p>No documents assigned.</p>@endforelse</div>
         </div>
         <div class="heading-arrows">
           <div class="heading-wrapper">
@@ -224,13 +220,15 @@
                       </svg>
                     </div>
                   </a>
-                  <a href="{{ route('games.show', $related->slug) }}#resources" class="card-button w-inline-block">
-                    <p class="button_text">Download Access</p>
+                  @if($related->canAccessAssets(auth()->user()))
+<a href="{{ route('games.show', $related->slug) }}#resources" class="card-button w-inline-block">
+                    <p class="button_text">Download Assets</p>
                     <div class="button_icon w-embed"><svg width="21" viewbox="0 0 21 21" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                         <path fill-rule="evenodd" clip-rule="evenodd" d="M7.28851 8.62951C6.86291 8.95363 6.64928 9.53626 6.86978 10.1139C7.12731 10.7886 7.63324 11.4086 8.19911 11.8883C8.77126 12.3733 9.48722 12.7854 10.2481 12.9756C10.4135 13.017 10.5865 13.017 10.752 12.9756C11.5128 12.7854 12.2287 12.3733 12.8009 11.8883C13.3668 11.4086 13.8727 10.7886 14.1302 10.1139C14.3507 9.53626 14.1371 8.95363 13.7115 8.62951C13.3276 8.33719 12.8216 8.27984 12.3829 8.4483C12.1379 8.54243 11.8312 8.64463 11.5003 8.72256V4.52527C11.5003 3.97298 11.0526 3.52527 10.5003 3.52527C9.94806 3.52527 9.50035 3.97298 9.50035 4.52527V8.72273C9.16925 8.64477 8.86228 8.54249 8.61705 8.4483C8.17844 8.27983 7.67236 8.33719 7.28851 8.62951ZM5.49902 13.9731C5.49902 13.4207 5.05131 12.973 4.49902 12.973C3.94674 12.973 3.49902 13.4207 3.49902 13.9731V14.8069C3.49902 15.5492 3.82639 16.2377 4.36955 16.7283C4.90934 17.2159 5.62154 17.4747 6.34547 17.4747H14.6545C15.3784 17.4747 16.0906 17.2159 16.6304 16.7283C17.1736 16.2377 17.5009 15.5492 17.5009 14.8069V13.9731C17.5009 13.4207 17.0532 12.973 16.5009 12.973C15.9486 12.973 15.5009 13.4207 15.5009 13.9731V14.8069C15.5009 14.9493 15.4392 15.1092 15.2898 15.2441C15.1371 15.3821 14.91 15.4747 14.6545 15.4747H6.34547C6.08998 15.4747 5.86288 15.3821 5.71012 15.2441C5.56073 15.1092 5.49902 14.9493 5.49902 14.8069V13.9731Z"></path>
                       </svg>
                     </div>
                   </a>
+              @endif
                 </div>
               </div>
             </div>@endforeach</div>
@@ -241,6 +239,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Swiper/11.0.5/swiper-bundle.min.js"></script>
 <script>
 const assetFilters = document.querySelector('#game-asset-filters');
+if (assetFilters) {
 const assetCards = [...document.querySelectorAll('#resources .assets_item[data-resource-id]')];
 const assetList = document.querySelector('#resources .assets_list');
 const selectAllButton = document.querySelector('#resources [data-select-all]');
@@ -368,6 +367,7 @@ archiveForm.addEventListener('submit', event => {
     });
 });
 filterAssets();
+}
 new Swiper('.cards-swiper', { slidesPerView:'auto', freeMode:true, navigation:{nextEl:'[data-arrow-next]',prevEl:'[data-arrow-prev]'} });
 </script>
 @endpush

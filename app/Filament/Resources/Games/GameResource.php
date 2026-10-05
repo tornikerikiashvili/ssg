@@ -112,7 +112,6 @@ class GameResource extends Resource
                     Select::make('release_status')->options(['upcoming' => 'Upcoming', 'released' => 'Released'])->required()->default('released'),
                     Toggle::make('preview_enabled')->label('Allow upcoming game preview')->helperText('Published upcoming games can open for permitted users. Assets stay unavailable until released.'),
                     Toggle::make('is_featured'),
-                    Select::make('company_id')->relationship('company', 'name')->searchable()->preload()->label('Audience company')->placeholder('All partner companies'),
                     Toggle::make('is_published')->label('Published to client area'),
                 ]),
                 Section::make('Game information')->schema([
@@ -156,13 +155,10 @@ class GameResource extends Resource
         return $table->columns([
             TextColumn::make('title')->searchable()->sortable()->limit(45),
             TextColumn::make('category')->badge(),
-            TextColumn::make('company.name')->label('Audience')->placeholder('All partners'),
             IconColumn::make('is_published')->label('Published')->boolean(),
-            IconColumn::make('is_demo')->label('Demo')->boolean(),
             TextColumn::make('updated_at')->since()->sortable(),
         ])->filters([
             TernaryFilter::make('is_published'),
-            SelectFilter::make('company_id')->relationship('company', 'name')->label('Company'),
             SelectFilter::make('category_id')->label('Category')->options(fn () => CatalogOption::options('category')),
         ])->recordActions([EditAction::make()->url(fn (Game $record) => static::getUrl('edit', ['record' => $record])), DeleteAction::make()])
             ->defaultSort('updated_at', 'desc');

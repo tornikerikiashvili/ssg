@@ -3,6 +3,9 @@
 @section('design-page', '6a998e81aa052a95c312800c')
 @section('content')
 <style>
+    [data-folder-filters] { display: flex; flex-direction: column; gap: 16px; }
+    [data-folder-filters] #asset-selection-actions { gap: 12px; }
+    [data-folder-filters] #asset-selection-hint { align-self: flex-start; max-width: 100%; }
     .downloads-pagination { margin-top: 24px; }
     .downloads-pagination .pagination { justify-content: flex-start; align-items: center; gap: 16px; }
 </style>
@@ -22,7 +25,20 @@
             <div>Oops! Something went wrong while submitting the form.</div>
           </div>
         </div>
-        <div data-folder-filters style="display:none"><x-asset-filters :categories="$assetCategories" id="download-asset-filters" /></div>
+        <div data-folder-filters style="display:none">
+          <x-asset-filters :categories="$assetCategories" id="download-asset-filters">
+            <x-slot:selectionActions>
+              <div id="asset-selection-actions" class="buttons" hidden style="display:none">
+                <button type="button" data-select-all aria-pressed="false" class="card-button"><span class="button_checkbox" aria-hidden="true"></span><span class="button_text">Select all</span></button>
+                <button type="submit" form="asset-archive" class="card-button is-grey">Download selected</button>
+              </div>
+            </x-slot:selectionActions>
+          </x-asset-filters>
+          <div id="asset-selection-hint" class="tag" role="status"><p>To select multiple options, please click on the multiplier cards.</p></div>
+          <p id="asset-selection-summary" class="text-size-small text-color-subtitles" role="status"></p>
+          <p id="asset-selection-error" class="text-size-small text-color-red-orange" role="alert" hidden></p>
+          <form id="asset-archive" hidden style="display:none" method="POST" action="{{ route('assets.basket.archive') }}">@csrf<div id="asset-selection-inputs"></div></form>
+        </div>
         <div data-assets-main="">
           <div class="games_list-small">@foreach($resources->getCollection()->groupBy(fn ($resource) => $resource->game_id ?? 'general') as $folderKey => $folderResources)<button aria-controls="resources-{{ $folderKey }}" data-open-folder="resources-{{ $folderKey }}" class="games_item-small"><img src="{{ $folderResources->first()->game?->cover_image_url ?: asset('client-design/images/folder.svg') }}" loading="lazy" width="70" height="90" alt="Name" class="dashboard_games-image">
               <div class="games_item-small-inner">
@@ -175,77 +191,175 @@
       document.querySelectorAll('#wf-form-Games-Filter input[type="radio"]').forEach(input => {
         input.addEventListener('change', () => input.form.requestSubmit());
       });
-      // Select asset
-      $('.assets_item').click(function(event) {
-        if (event.target.closest('a, button')) return;
-        $(this).toggleClass('is-active');
-        $(this).find('.assets_item-checkbox').toggleClass('is-active');
-      });
-      const assetFilters = document.getElementById('download-asset-filters');
-      let currentFolder = null;
-      function filterFolderAssets() {
-        if (!currentFolder) return;
-        const category = assetFilters.querySelector('[name="asset_category"]:checked').value;
-        const sort = assetFilters.querySelector('[name="asset_sort"]:checked').value;
-        const cards = [...currentFolder.querySelectorAll('.assets_item')];
-        cards.forEach(card => {
-          const visible = !category || card.dataset.categoryId === category;
-          card.hidden = !visible;
-          card.style.display = visible ? '' : 'none';
-          if (!visible) {
-            card.classList.remove('is-active');
-            card.querySelector('.assets_item-checkbox').classList.remove('is-active');
-          }
-        });
-        cards.sort((a, b) => (sort === 'newest'
-          ? Number(b.dataset.createdAt) - Number(a.dataset.createdAt)
-          : a.dataset.title.localeCompare(b.dataset.title)) || Number(a.dataset.resourceId) - Number(b.dataset.resourceId))
-          .forEach(card => currentFolder.querySelector('.assets_list').append(card));
-        currentFolder.querySelector('[data-folder-empty]').hidden = cards.some(card => !card.hidden);
-        assetFilters.querySelectorAll('[name="asset_category"]').forEach(input => input.previousElementSibling.classList.toggle('w--redirected-checked', input.checked));
-      }
-      assetFilters.addEventListener('submit', event => event.preventDefault());
-      assetFilters.addEventListener('change', event => {
-        filterFolderAssets();
-        if (event.target.name === 'asset_sort') {
-          const trigger = assetFilters.querySelector('[data-accordion-trigger]');
-          trigger.querySelector('p').textContent = event.target.closest('label').textContent.trim();
-          if (trigger.getAttribute('aria-expanded') === 'true') trigger.click();
-        }
-      });
-      $('[data-open-folder]').click(function() {
-        $('[data-main-filters] [data-accordion-trigger][aria-expanded="true"]').click();
-        $('[data-assets-main], [data-main-filters], [data-folder]').hide();
-        currentFolder = document.querySelector('[data-folder="' + this.dataset.openFolder + '"]');
-        currentFolder.style.display = 'flex';
-        assetFilters.reset();
-        const categoryIds = new Set(JSON.parse(currentFolder.dataset.dropboxCategoryIds).map(String));
-        assetFilters.querySelectorAll('[name="asset_category"]').forEach(input => {
-          input.closest('label').style.display = !input.value || categoryIds.has(input.value) ? '' : 'none';
-        });
-        assetFilters.querySelector('[data-accordion-trigger] p').textContent = 'Sort by';
-        $('[data-folder-filters]').show();
-        filterFolderAssets();
-      });
-      $('[data-close-folder]').click(function() {
-        $(assetFilters).find('[data-accordion-trigger][aria-expanded="true"]').click();
-        $('[data-folder], [data-folder-filters]').hide();
-        $('[data-assets-main], [data-main-filters]').css('display', '');
-        currentFolder = null;
-      });
-      // Select all
-      $('[data-select-all]').click(function() {
-        $(this).toggleClass('is-active');
-        $(this).find('.button_checkbox').toggleClass('is-active');
-        // Select
-        if ($(this).hasClass('is-active')) {
-          $('.assets_item:not(.is-active)').click();
-          $(this).find('.button_text').text('Unselect all');
-        } else {
-          // Unselect
-          $('.assets_item.is-active').click();
-          $(this).find('.button_text').text('Select all');
-        }
-      });
+const assetFilters = document.querySelector('#download-asset-filters');
+const allAssetCards = [...document.querySelectorAll('[data-folder] .assets_item[data-resource-id]')];
+let assetCards = [];
+let currentFolder = null;
+let assetList = null;
+const selectAllButton = document.querySelector('#asset-selection-actions [data-select-all]');
+const archiveForm = document.querySelector('#asset-archive');
+const assetSelectionHint = document.querySelector('#asset-selection-hint');
+const assetCategories = assetFilters.querySelector('.filter_buttons');
+const selectionActions = document.querySelector('#asset-selection-actions');
+const selectionSummary = document.querySelector('#asset-selection-summary');
+const selectionError = document.querySelector('#asset-selection-error');
+const downloadAssetsButton = selectionActions.querySelector('[type="submit"]');
+const selectedAssets = () => visibleAssets().filter(card => card.classList.contains('is-active'));
+const assetSize = card => {
+    const value = card.querySelector('[data-asset-size]')?.dataset.assetSize;
+    return value === undefined || value === '' ? NaN : Number(value);
+};
+const totalSize = cards => cards.reduce((total, card) => total + assetSize(card), 0);
+function showSelectionError(message = '') {
+    selectionError.textContent = message;
+    selectionError.hidden = !message;
+}
+function validSelection(cards) {
+    if (cards.length > 50) {
+        showSelectionError('Select up to 50 files per download.');
+        return false;
+    }
+    if (cards.some(card => !Number.isFinite(assetSize(card)) || assetSize(card) < 0)) {
+        showSelectionError('A file size is unavailable. Please download that file individually.');
+        return false;
+    }
+    if (totalSize(cards) > 100 * 1024 * 1024) {
+        showSelectionError('The selected files exceed 100 MB. Please select fewer files.');
+        return false;
+    }
+    showSelectionError();
+    return true;
+}
+const visibleAssets = () => assetCards.filter(card => !card.hidden);
+function selectAsset(card, selected) {
+    card.classList.toggle('is-active', selected);
+    card.querySelector('.assets_item-checkbox').classList.toggle('is-active', selected);
+}
+function updateAssetSelection() {
+    const visible = visibleAssets();
+    const hasSelection = visible.some(card => card.classList.contains('is-active'));
+    assetCategories.hidden = hasSelection;
+    assetCategories.style.display = hasSelection ? 'none' : '';
+    document.querySelector('#asset-selection-inputs').replaceChildren();
+    selectionActions.hidden = !hasSelection;
+    selectionActions.style.display = hasSelection ? '' : 'none';
+    selectionSummary.textContent = `${selectedAssets().length} / 50 files selected · ${(totalSize(selectedAssets()) / (1024 * 1024)).toFixed(2)} / 100 MB`;
+    assetSelectionHint.hidden = hasSelection;
+    assetSelectionHint.style.display = hasSelection ? 'none' : '';
+    const allSelected = visible.length > 0 && visible.every(card => card.classList.contains('is-active'));
+    selectAllButton.disabled = visible.length === 0;
+    selectAllButton.setAttribute('aria-pressed', String(allSelected));
+    selectAllButton.querySelector('.button_text').textContent = allSelected ? 'Unselect all' : 'Select all';
+    selectAllButton.querySelector('.button_checkbox').classList.toggle('is-active', allSelected);
+    downloadAssetsButton.disabled = !hasSelection;
+    downloadAssetsButton.textContent = allSelected ? 'Download all' : 'Download selected';
+}
+function filterAssets() {
+    const category = assetFilters.querySelector('[name="asset_category"]:checked').value;
+    const sort = assetFilters.querySelector('[name="asset_sort"]:checked').value;
+    assetCards.forEach(card => {
+        card.hidden = category !== '' && card.dataset.categoryId !== category;
+        card.style.display = card.hidden ? 'none' : '';
+        if (card.hidden) selectAsset(card, false);
+    });
+    [...assetCards].sort((a, b) => {
+        const comparison = sort === 'newest'
+            ? Number(b.dataset.createdAt) - Number(a.dataset.createdAt)
+            : a.dataset.title.localeCompare(b.dataset.title);
+        return comparison || Number(a.dataset.resourceId) - Number(b.dataset.resourceId);
+    }).forEach(card => assetList.append(card));
+    assetFilters.querySelectorAll('[name="asset_category"]').forEach(input => {
+        input.previousElementSibling.classList.toggle('w--redirected-checked', input.checked);
+    });
+    if (currentFolder) currentFolder.querySelector('[data-folder-empty]').hidden = visibleAssets().length > 0;
+    updateAssetSelection();
+}
+assetFilters.addEventListener('submit', event => event.preventDefault());
+assetFilters.addEventListener('change', event => {
+    if (event.target.name === 'asset_category') {
+        assetCards.forEach(card => selectAsset(card, false));
+        showSelectionError();
+    }
+    filterAssets();
+    if (event.target.name === 'asset_sort') {
+        const trigger = assetFilters.querySelector('[data-accordion-trigger]');
+        trigger.querySelector('p').textContent = event.target.closest('label').textContent.trim();
+        if (trigger.getAttribute('aria-expanded') === 'true') trigger.click();
+    }
+});
+allAssetCards.forEach(card => card.addEventListener('click', event => {
+    if (assetCards.includes(card) && !event.target.closest('a, button')) {
+        const selecting = !card.classList.contains('is-active');
+        if (selecting && !validSelection([...selectedAssets(), card])) return;
+        showSelectionError();
+        selectAsset(card, selecting);
+        updateAssetSelection();
+    }
+}));
+selectAllButton.addEventListener('click', () => {
+    const visible = visibleAssets();
+    const select = visible.some(card => !card.classList.contains('is-active'));
+    if (select && !validSelection(visible)) return;
+    showSelectionError();
+    visible.forEach(card => selectAsset(card, select));
+    updateAssetSelection();
+});
+archiveForm.addEventListener('submit', event => {
+    const selected = visibleAssets().filter(card => card.classList.contains('is-active'));
+    if (!selected.length || !validSelection(selected)) {
+        event.preventDefault();
+        return;
+    }
+    const container = document.querySelector('#asset-selection-inputs');
+    container.replaceChildren();
+    selected.forEach(card => {
+        const input = document.createElement('input');
+        input.type = 'hidden';
+        input.name = 'ids[]';
+        input.value = card.dataset.resourceId;
+        container.append(input);
+    });
+});
+filterAssets();
+
+function resetFolderSelection() {
+    allAssetCards.forEach(card => selectAsset(card, false));
+    showSelectionError();
+    updateAssetSelection();
+}
+function openAssetFolder(folder) {
+    resetFolderSelection();
+    currentFolder = folder;
+    assetCards = [...folder.querySelectorAll('.assets_item[data-resource-id]')];
+    assetList = folder.querySelector('.assets_list');
+    assetFilters.reset();
+    const categoryIds = new Set(JSON.parse(folder.dataset.dropboxCategoryIds).map(String));
+    assetFilters.querySelectorAll('[name="asset_category"]').forEach(input => {
+        input.closest('label').style.display = !input.value || categoryIds.has(input.value) ? '' : 'none';
+    });
+    assetFilters.querySelector('[data-accordion-trigger] p').textContent = 'Sort by';
+    filterAssets();
+}
+function closeAssetFolder() {
+    resetFolderSelection();
+    currentFolder = null;
+    assetCards = [];
+    assetList = null;
+    updateAssetSelection();
+}
+$('[data-open-folder]').click(function() {
+    $('[data-main-filters] [data-accordion-trigger][aria-expanded="true"]').click();
+    $('[data-assets-main], [data-main-filters], [data-folder]').hide();
+    const folder = document.querySelector('[data-folder="' + this.dataset.openFolder + '"]');
+    openAssetFolder(folder);
+    folder.style.display = 'flex';
+    $('[data-folder-filters]').show();
+});
+$('[data-close-folder]').click(function() {
+    $(assetFilters).find('[data-accordion-trigger][aria-expanded="true"]').click();
+    $('[data-folder], [data-folder-filters]').hide();
+    $('[data-assets-main], [data-main-filters]').css('display', '');
+    closeAssetFolder();
+});
     </script>
 @endpush

@@ -26,7 +26,11 @@ class Banner extends PortalContent
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        return parent::scopeVisibleTo($query, $user)->where(fn (Builder $banners) => $banners->whereNull('game_id')
+        if (! $user->canAccessClientArea()) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->where('is_published', true)->where(fn (Builder $banners) => $banners->whereNull('game_id')
             ->orWhereHas('game', fn (Builder $games) => $games->visibleTo($user)));
     }
 

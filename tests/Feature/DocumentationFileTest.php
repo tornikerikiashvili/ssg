@@ -47,6 +47,7 @@ class DocumentationFileTest extends TestCase
         $user = User::factory()->for(Company::factory())->create();
         $document = ResourceItem::factory()->create(['kind' => 'documentation']);
         $game = Game::factory()->create();
+        $user->company->purchasedGames()->attach($game);
         $gameDocument = ResourceItem::factory()->for($game)->create(['kind' => 'documentation']);
 
         $page = HTMLDocument::createFromString($this->actingAs($user)->get('/resources/documentation')->assertOk()->getContent(), LIBXML_NOERROR);

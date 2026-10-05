@@ -46,9 +46,12 @@ class GameCatalogTest extends TestCase
         Filament::bootCurrentPanel();
     }
 
-    private function partner(): User
+    private function partner(array $purchasedGameIds = []): User
     {
-        return User::factory()->for(Company::factory())->create();
+        $user = User::factory()->for(Company::factory())->create();
+        $user->company->purchasedGames()->sync($purchasedGameIds);
+
+        return $user;
     }
 
     public function test_admin_can_upload_replace_and_remove_a_game_cover(): void
@@ -124,7 +127,7 @@ class GameCatalogTest extends TestCase
         $game = Game::factory()->create(['is_featured' => true]);
         $cover = $game->addMedia(UploadedFile::fake()->image('cover.jpg'))->toMediaCollection('cover');
         ResourceItem::factory()->for($game)->create(['kind' => 'download']);
-        $this->actingAs($this->partner());
+        $this->actingAs($this->partner([$game->id]));
 
         $this->get('/games')->assertOk()->assertSee($cover->getUrl());
         $this->get('/games/'.$game->slug)->assertOk()->assertSee($cover->getUrl());
@@ -144,7 +147,7 @@ class GameCatalogTest extends TestCase
         $this->assertSame('Puzzles', $game->fresh()->category);
         $this->get('/admin/game-categories')->assertOk()->assertSee('Taxonomy')->assertDontSee('Categories &amp; filter options', false);
         $this->get('/admin/catalog-options')->assertNotFound();
-        $this->actingAs($this->partner())->get('/games?category=Puzzles')->assertOk()->assertSee($game->title);
+        $this->actingAs($this->partner([$game->id]))->get('/games?category=Puzzles')->assertOk()->assertSee($game->title);
         $this->get('/resources/download?category=Puzzles')->assertOk()->assertSee($game->title)
             ->assertViewHas('resources', fn ($resources) => $resources->modelKeys() === [$asset->id]);
         $this->get('/admin/game-categories')->assertForbidden();
@@ -176,7 +179,7 @@ class GameCatalogTest extends TestCase
         $this->assertSame($option->id, $game->fresh()->getAttribute($field));
         Livewire::test($page)->callAction('create', data: ['name' => 'Wrong taxonomy', 'sort_order' => 0, 'kind' => 'document'])->assertHasActionErrors(['kind']);
 
-        $this->actingAs($this->partner())->get('/games?'.http_build_query([$field => $option->id]))->assertOk()
+        $this->actingAs($this->partner([$game->id]))->get('/games?'.http_build_query([$field => $option->id]))->assertOk()
             ->assertSee('Renamed option')->assertViewHas('games', fn ($games) => $games->modelKeys() === [$game->id]);
         $this->get('/resources/download?'.http_build_query([$field => $option->id]))->assertOk()
             ->assertSee('Renamed option')->assertViewHas('resources', fn ($resources) => $resources->modelKeys() === [$asset->id]);
@@ -267,7 +270,7 @@ class GameCatalogTest extends TestCase
     {
         $game = Game::factory()->create();
         ResourceItem::factory()->for($game)->create(['kind' => 'download', 'file_path' => 'demo/marketing-pack.txt']);
-        $this->actingAs($this->partner())->get('/games/'.$game->slug)->assertOk()
+        $this->actingAs($this->partner([$game->id]))->get('/games/'.$game->slug)->assertOk()
             ->assertSee('To select multiple options, please click on the multiplier cards.')
             ->assertSee('id="asset-selection-hint" class="tag" role="status"', false)
             ->assertSee('id="asset-archive" hidden style="display:none"', false)
@@ -352,7 +355,7 @@ class GameCatalogTest extends TestCase
         $b = Game::factory()->create(['title' => 'Beta game', ...$values]);
         $other = Game::factory()->create(['title' => 'Filtered out']);
         $private = Game::factory()->for(Company::factory())->create(['title' => 'Secret title', ...$values]);
-        $this->actingAs($this->partner())->get('/games?'.http_build_query([...$values, 'sort' => 'name']))->assertOk()->assertSeeInOrder([$a->title, $b->title])->assertDontSee($other->title)->assertDontSee($private->title);
+        $this->actingAs($this->partner())->get('/games?'.http_build_query([...$values, 'sort' => 'name']))->assertOk()->assertSeeInOrder([$a->title, $b->title])->assertDontSee($other->title)->assertSee($private->title);
         $this->get('/games?game_type_id='.$volatility->id)->assertSessionHasErrors('game_type_id');
     }
 
@@ -381,7 +384,7 @@ class GameCatalogTest extends TestCase
         $second = ResourceItem::factory()->for($zulu)->create(['title' => 'A asset']);
         ResourceItem::factory()->for(Game::factory())->create();
         ResourceItem::factory()->for(Company::factory())->for($alpha)->create(['title' => 'Private download']);
-        $this->actingAs($this->partner());
+        $this->actingAs($this->partner([$alpha->id, $zulu->id]));
         $filters = ['category' => 'Puzzle', 'game_type_id' => $type->id, 'payout_type_id' => $payout->id, 'volatility_id' => $volatility->id];
         foreach ($filters as $key => $value) {
             $this->get('/resources/download?'.http_build_query([$key => $value]))->assertOk()
@@ -394,6 +397,46 @@ class GameCatalogTest extends TestCase
         $this->get('/resources/download?game_type_id='.$volatility->id)->assertSessionHasErrors('game_type_id');
         $this->get('/resources/download?sort=invalid')->assertSessionHasErrors('sort');
         $this->get('/resources/download?category=Puzzle&q=nonexistent')->assertOk()->assertSee('No downloads match your filters.');
+    }
+
+    public function test_download_center_paginates_game_folders_instead_of_assets(): void
+    {
+        $games = Game::factory()->count(3)->sequence(
+            ['title' => 'Alpha download game'],
+            ['title' => 'Beta download game'],
+            ['title' => 'Gamma download game'],
+        )->create();
+        foreach ($games as $game) {
+            ResourceItem::factory()->count(13)->for($game)->create();
+        }
+        $this->actingAs($this->partner($games->modelKeys()))->get('/resources/download')->assertOk()
+            ->assertViewHas('resources', fn ($resources) => $resources->total() === 3
+                && $resources->count() === 39 && ! $resources->hasPages())
+            ->assertSeeInOrder($games->pluck('title')->all())
+            ->assertSee('id="asset-selection-actions" class="buttons" hidden style="display:none"', false)
+            ->assertSee('type="submit" form="asset-archive"', false)
+            ->assertSee('action="'.route('assets.basket.archive').'"', false)
+            ->assertSee('To select multiple options, please click on the multiplier cards.')
+            ->assertDontSee('aria-label="Pagination"', false);
+    }
+
+    public function test_download_center_keeps_complete_folders_on_separate_pages(): void
+    {
+        $games = Game::factory()->count(13)->sequence(fn ($sequence) => ['title' => sprintf('Download game %02d', $sequence->index)])->create();
+        foreach ($games as $game) {
+            ResourceItem::factory()->count(2)->for($game)->create();
+        }
+        ResourceItem::factory()->create(['game_id' => null, 'title' => 'General download']);
+        $this->actingAs($this->partner($games->modelKeys()));
+        $this->get('/resources/download?sort=name')->assertOk()
+            ->assertViewHas('resources', fn ($resources) => $resources->total() === 14
+                && $resources->count() === 24 && $resources->lastPage() === 2)
+            ->assertSee('aria-label="Pagination"', false)
+            ->assertDontSee('Download game 12')->assertDontSee('General download');
+        $this->get('/resources/download?sort=name&page=2')->assertOk()
+            ->assertViewHas('resources', fn ($resources) => $resources->count() === 3)
+            ->assertSee('Download game 12')->assertSee('General download')
+            ->assertDontSee('Download game 00');
     }
 
     public function test_documentation_manager_updates_uploaded_files_on_the_owner_game(): void
@@ -412,7 +455,7 @@ class GameCatalogTest extends TestCase
         $this->assertSame($game->id, $resource->game_id);
         $this->assertTrue($resource->hasDownloadableFile());
         Storage::disk('local')->assertExists($resource->file_path);
-        $this->actingAs($this->partner())->get('/resource/'.$resource->id.'/download')->assertOk();
+        $this->actingAs($this->partner([$game->id]))->get('/resource/'.$resource->id.'/download')->assertOk();
     }
 
     public function test_game_documentation_can_be_assigned_and_removed_without_deleting_files(): void
@@ -465,7 +508,7 @@ class GameCatalogTest extends TestCase
         $tool = EngagementTool::factory()->create(['title' => 'Assigned tool']);
         $hidden = EngagementTool::factory()->for(Company::factory())->create(['title' => 'Hidden tool']);
         $game->engagementTools()->sync([$tool->id, $hidden->id]);
-        $this->actingAs($this->partner())->get('/games/'.$game->slug.'?asset_category='.$category->id)->assertOk()->assertSee($asset->title)->assertSee('Other asset')->assertDontSee('Private asset')->assertDontSee('Draft asset')->assertViewHas('resources', fn ($resources) => $resources->count() === 2)->assertSee($doc->title)->assertSee($tool->title)->assertDontSee($hidden->title);
+        $this->actingAs($this->partner([$game->id]))->get('/games/'.$game->slug.'?asset_category='.$category->id)->assertOk()->assertSee($asset->title)->assertSee('Other asset')->assertDontSee('Private asset')->assertDontSee('Draft asset')->assertViewHas('resources', fn ($resources) => $resources->count() === 2)->assertSee($doc->title)->assertSee($tool->title)->assertDontSee($hidden->title);
     }
 
     public function test_basket_downloads_only_selected_assets_and_preserves_access_boundaries(): void
@@ -480,7 +523,7 @@ class GameCatalogTest extends TestCase
         $privateGame = Game::factory()->for(Company::factory())->create();
         $privateGameAsset = ResourceItem::factory()->create(['game_id' => $privateGame->id, 'file_path' => 'game-assets/basket.pdf']);
         $this->post('/assets/basket/archive', ['ids' => [$selected->id]])->assertRedirect('/login');
-        $this->actingAs($this->partner());
+        $this->actingAs($this->partner([$game->id]));
         $response = $this->post('/assets/basket/archive', ['ids' => [$selected->id]])->assertOk()->assertDownload('game-assets.zip');
         $path = $response->baseResponse->getFile()->getPathname();
         $zip = new ZipArchive;
@@ -507,7 +550,7 @@ class GameCatalogTest extends TestCase
         $game = Game::factory()->create();
         $file = ResourceItem::factory()->create(['game_id' => $game->id, 'file_path' => 'game-assets/example.pdf']);
         $other = ResourceItem::factory()->for(Game::factory())->create(['file_path' => 'game-assets/example.pdf']);
-        $user = $this->partner();
+        $user = $this->partner([$game->id]);
         $private = ResourceItem::factory()->for(Company::factory())->create(['game_id' => $game->id, 'file_path' => 'game-assets/example.pdf']);
         $this->actingAs($user)->post('/games/'.$game->slug.'/assets/archive', ['ids' => [$private->id]])->assertNotFound();
         $this->actingAs($user)->post('/games/'.$game->slug.'/assets/archive', ['ids' => [$other->id]])->assertNotFound();

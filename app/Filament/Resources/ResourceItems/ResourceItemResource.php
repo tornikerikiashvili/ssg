@@ -61,12 +61,18 @@ class ResourceItemResource extends Resource
                 Select::make('catalog_option_id')->label('Documentation category')->options(fn () => CatalogOption::options('document'))
                     ->required()->searchable()->rules([Rule::exists('catalog_options', 'id')->where('kind', 'document')]),
             ] : []),
-            FileUpload::make('file_path')->label('File')->disk('local')->directory(static::$standalone ? 'portal-resources' : 'game-assets')->visibility('private')->maxSize(12288)
+            Select::make('documentation_type')->label('Documentation action')
+                ->options(['file' => 'Download file', 'link' => 'Open link'])->default('file')->required()->live()
+                ->visible(fn ($get) => $get('kind') === 'documentation')->rules([Rule::in(['file', 'link'])]),
+            TextInput::make('external_url')->label('Link URL')->url()->rules(['url:http,https'])->maxLength(2048)
+                ->visible(fn ($get) => $get('kind') === 'documentation' && $get('documentation_type') === 'link')->required(),
+            Toggle::make('show_on_engagement_tools')->label('Show on Engagement Tools page')
+                ->visible(fn ($get) => $get('kind') === 'documentation')->default(false),
+            FileUpload::make('file_path')->visible(fn ($get) => $get('kind') !== 'documentation' || $get('documentation_type') !== 'link')->label('File')->disk('local')->directory(static::$standalone ? 'portal-resources' : 'game-assets')->visibility('private')->maxSize(12288)
                 ->preventFilePathTampering()->helperText('Private local storage, up to 12 MB per file. Existing demo files remain available; uploading replaces the file association.'),
 
             Select::make('company_id')->relationship('company', 'name')->searchable()->preload()->label('Audience company')->placeholder('All partner companies')->helperText('Leave empty to share with all active partner companies.'),
             Toggle::make('is_published')->label('Published to client area'),
-            Toggle::make('is_demo')->label('Sample / demo content'),
         ]);
     }
 
@@ -78,7 +84,6 @@ class ResourceItemResource extends Resource
             TextColumn::make('company.name')->label('Audience')->placeholder('All partners'),
             TextColumn::make('catalogOption.name')->label('Documentation category')->visible(static::$resourceKind === 'documentation'),
             IconColumn::make('is_published')->label('Published')->boolean(),
-            IconColumn::make('is_demo')->label('Demo')->boolean(),
             TextColumn::make('updated_at')->since()->sortable(),
         ])->filters([
             TernaryFilter::make('is_published'),

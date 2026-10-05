@@ -16,6 +16,21 @@ class ResourceItem extends PortalContent
         'demo/banner.svg' => 'Demo banner (SVG)',
     ];
 
+    protected function casts(): array
+    {
+        return [...parent::casts(), 'show_on_engagement_tools' => 'boolean'];
+    }
+
+    public function isDocumentationLink(): bool
+    {
+        return $this->kind === 'documentation' && $this->documentation_type === 'link';
+    }
+
+    public function documentationUrl(): string
+    {
+        return route($this->isDocumentationLink() ? 'resources.show' : 'resources.download', $this->id);
+    }
+
     public function catalogOption(): BelongsTo
     {
         return $this->belongsTo(CatalogOption::class);
@@ -23,6 +38,10 @@ class ResourceItem extends PortalContent
 
     public function hasDownloadableFile(): bool
     {
+        if ($this->isDocumentationLink()) {
+            return false;
+        }
+
         if ($this->dropbox_file_id) {
             return (bool) $this->dropbox_available;
         }
@@ -42,6 +61,6 @@ class ResourceItem extends PortalContent
             ->where(fn (Builder $files) => $files->whereNull('dropbox_file_id')->orWhere('dropbox_available', true))
             ->where(fn (Builder $assets) => $assets
                 ->whereNull('game_id')
-                ->orWhereHas('game', fn (Builder $games) => $games->visibleTo($user)->when(! $user->is_admin, fn (Builder $games) => $games->where('release_status', 'released'))));
+                ->orWhereHas('game', fn (Builder $games) => $games->visibleTo($user)->where('release_status', 'released')->purchasedBy($user)));
     }
 }

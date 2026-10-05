@@ -30,7 +30,7 @@
     </div>
     <x-pagination :records="$items" />
     <div data-collapsing class="dashboard-row is-resources">
-        <div data-collapsing class="dashboard_block is-downloads is-dark">
+        <div data-collapsing class="dashboard_block is-downloads is-dark" style="min-height:400px">
             <div no-scrollbar class="dashboard_block-header"><span class="tab-link is-active"><p>Regional Availability</p><div class="tab-link_line"></div></span></div>
             <div data-dark-scrollbar class="downloads_list">
                 @forelse($regionalGames as $regionalGame)

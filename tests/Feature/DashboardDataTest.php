@@ -30,6 +30,7 @@ class DashboardDataTest extends TestCase
         $this->travelTo(now()->startOfDay());
         $user = User::factory()->for(Company::factory())->create();
         $own = Game::factory()->create(['company_id' => $user->company_id, 'title' => 'Own live game', 'is_featured' => true]);
+        $user->company->purchasedGames()->attach($own);
         Game::factory()->create(['title' => 'Older shared game', 'created_at' => now()->subDays(9)]);
         $private = Game::factory()->for(Company::factory())->create(['title' => 'Secret game', 'is_featured' => true]);
         Game::factory()->create(['is_published' => false, 'title' => 'Unpublished game']);
@@ -41,13 +42,13 @@ class DashboardDataTest extends TestCase
         Announcement::factory()->for(Company::factory())->create(['title' => 'Secret update']);
 
         $this->actingAs($user)->get('/dashboard')->assertOk()
-            ->assertViewHas('gameCount', 2)->assertViewHas('newGameCount', 1)
+            ->assertViewHas('gameCount', 3)->assertViewHas('newGameCount', 2)
             ->assertViewHas('newAssetCount', 1)->assertViewHas('assetCount', 2)
-            ->assertViewHas('featuredCount', 1)->assertViewHas('downloadCount', 0)
+            ->assertViewHas('featuredCount', 2)->assertViewHas('downloadCount', 0)
             ->assertSee('Own live game')->assertSee('Visible update')
-            ->assertDontSee('Secret game')->assertDontSee('Unpublished game')->assertDontSee('Secret update');
+            ->assertSee('Secret game')->assertDontSee('Unpublished game')->assertDontSee('Secret update');
         $own->update(['title' => 'Updated live game', 'is_featured' => false]);
-        $this->get('/dashboard')->assertViewHas('featuredCount', 0)->assertSee('Updated live game')->assertDontSee('Own live game');
+        $this->get('/dashboard')->assertViewHas('featuredCount', 1)->assertSee('Updated live game')->assertDontSee('Own live game');
     }
 
     public function test_download_tracking_counts_only_authorized_existing_files_for_the_current_user(): void

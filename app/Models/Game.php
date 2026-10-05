@@ -120,6 +120,23 @@ class Game extends PortalContent implements HasMedia
         return $this->belongsTo(CatalogOption::class, 'volatility_id');
     }
 
+    public function canAccessAssets(User $user): bool
+    {
+        return $user->canAccessClientArea()
+            && $this->release_status === 'released'
+            && $this->purchasingCompanies()->whereKey($user->company_id)->exists();
+    }
+
+    public function purchasingCompanies(): BelongsToMany
+    {
+        return $this->belongsToMany(Company::class, 'company_game');
+    }
+
+    public function scopePurchasedBy(Builder $query, User $user): Builder
+    {
+        return $query->whereHas('purchasingCompanies', fn (Builder $companies): Builder => $companies->whereKey($user->company_id));
+    }
+
     public function engagementTools(): BelongsToMany
     {
         return $this->belongsToMany(EngagementTool::class);
@@ -154,14 +171,17 @@ class Game extends PortalContent implements HasMedia
             return $query;
         }
 
-        return $query->where(fn (Builder $games) => $games->whereNull('company_id')->orWhere('company_id', $user->company_id))
-            ->where(fn (Builder $games) => $games->whereDoesntHave('regionAvailabilities')
-                ->orWhereHas('regionAvailabilities', fn (Builder $regions) => $regions->whereIn('region_id', $user->accessibleRegionIds())->whereIn('status', ['available', 'limited', 'upcoming'])));
+        return $query->where(fn (Builder $games) => $games->whereDoesntHave('regionAvailabilities')
+            ->orWhereHas('regionAvailabilities', fn (Builder $regions) => $regions->whereIn('region_id', $user->accessibleRegionIds())->whereIn('status', ['available', 'limited', 'upcoming'])));
     }
 
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
-        parent::scopeVisibleTo($query, $user);
+        $query->where('is_published', true);
+
+        if (! $user->canAccessClientArea()) {
+            return $query->whereRaw('1 = 0');
+        }
 
         if ($user->is_admin) {
             return $query;

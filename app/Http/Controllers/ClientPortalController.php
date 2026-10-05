@@ -43,15 +43,22 @@ class ClientPortalController extends Controller
 
         $since = now()->subDays(7);
         $games = Game::visibleTo($user);
+        $purchasedGames = (clone $games)->purchasedBy($user);
+        $availableGames = (clone $games)->whereNotIn('id', (clone $purchasedGames)->select('games.id'))
+            ->whereHas('regionAvailabilities', fn ($regions) => $regions
+                ->whereIn('region_id', $user->accessibleRegionIds())
+                ->whereIn('status', ['available', 'limited']));
         $assets = ResourceItem::visibleTo($user)->where('kind', 'download');
         $downloads = ResourceDownload::where('user_id', $user->id);
 
         return view('client.dashboard', [
-            'games' => (clone $games)->orderByDesc('is_featured')->orderBy('title')->limit(6)->get(),
+            'games' => (clone $purchasedGames)->orderByDesc('is_featured')->orderBy('title')->limit(6)->get(),
             'recentGames' => (clone $games)->latest()->orderByDesc('id')->limit(5)->get(),
-            'featuredGames' => (clone $games)->where('is_featured', true)->latest()->orderByDesc('id')->limit(6)->get(),
+            'availableGames' => (clone $availableGames)->latest()->orderByDesc('id')->limit(6)->get(),
             'featuredGame' => (clone $games)->where('is_featured', true)->latest()->orderByDesc('id')->first(),
             'gameCount' => (clone $games)->count(),
+            'purchasedGameCount' => (clone $purchasedGames)->count(),
+            'availableGameCount' => (clone $availableGames)->count(),
             'newGameCount' => (clone $games)->where('created_at', '>=', $since)->count(),
             'newAssetCount' => (clone $assets)->where('created_at', '>=', $since)->count(),
             'assetCount' => (clone $assets)->count(),
@@ -145,7 +152,26 @@ class ClientPortalController extends Controller
                     ->orderByDesc('game_id');
             }
         }
-        $resources = $query->orderBy('title')->orderBy('id')->paginate(12)->withQueryString();
+        if ($kind === 'download') {
+            $folders = (clone $query)->withoutEagerLoads()->reorder()->select('game_id')->groupBy('game_id');
+            if ($sort === 'name') {
+                $folders->orderBy($gameValue)->orderBy('game_id');
+            } else {
+                $folders->orderByRaw('('.$gameValue->toSql().') DESC NULLS LAST', $gameValue->getBindings())
+                    ->orderByDesc('game_id');
+            }
+            $resources = $folders->paginate(12)->withQueryString();
+            $gameIds = $resources->getCollection()->pluck('game_id');
+            $folderAssets = $query->where(function ($query) use ($gameIds): void {
+                $query->whereIn('game_id', $gameIds->filter(fn ($id) => $id !== null));
+                if ($gameIds->contains(null)) {
+                    $query->orWhereNull('game_id');
+                }
+            })->orderBy('title')->orderBy('id')->get();
+            $resources->setCollection($folderAssets);
+        } else {
+            $resources = $query->orderBy('title')->orderBy('id')->paginate(12)->withQueryString();
+        }
         $licenses = $kind === 'certificate'
             ? ResourceItem::visibleTo($request->user())->where('kind', 'license')->whereNull('game_id')
                 ->when($filters['q'] ?? null, fn ($query, $q) => $query->where('title', 'ilike', '%'.$q.'%'))
@@ -165,9 +191,15 @@ class ClientPortalController extends Controller
             ->unique('id')->sortBy('name')->pluck('name', 'id')->all();
     }
 
-    public function resource(Request $request, int $resourceItem): View|StreamedResponse
+    public function resource(Request $request, int $resourceItem): View|StreamedResponse|RedirectResponse
     {
         $resource = ResourceItem::visibleTo($request->user())->with('game')->findOrFail($resourceItem);
+
+        if ($resource->isDocumentationLink()) {
+            abort_unless(filter_var($resource->external_url, FILTER_VALIDATE_URL) && in_array(strtolower(parse_url($resource->external_url, PHP_URL_SCHEME) ?? ''), ['http', 'https'], true), 404);
+
+            return redirect()->away($resource->external_url);
+        }
 
         if ($resource->kind === 'documentation') {
             return $this->fileResponse($request, $resource);
@@ -325,6 +357,10 @@ class ClientPortalController extends Controller
 
     public function tools(Request $request): View
     {
-        return view('client.tools', ['tools' => EngagementTool::visibleTo($request->user())->orderBy('title')->paginate(12)]);
+        return view('client.tools', [
+            'tools' => EngagementTool::visibleTo($request->user())->orderBy('title')->paginate(12),
+            'documents' => ResourceItem::visibleTo($request->user())->where('kind', 'documentation')
+                ->where('show_on_engagement_tools', true)->with('catalogOption')->orderBy('title')->get(),
+        ]);
     }
 }

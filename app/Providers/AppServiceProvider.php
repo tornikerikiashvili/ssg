@@ -38,6 +38,9 @@ class AppServiceProvider extends ServiceProvider
             $view->with('headerNotifications', $user
                 ? PortalNotification::visibleTo($user)->latest()->orderByDesc('id')->limit(4)->get()
                 : collect());
+            $view->with('headerAnnouncements', $user
+                ? Announcement::visibleTo($user)->where('show_on_dashboard', true)->latest()->orderByDesc('id')->limit(4)->get()
+                : collect());
         });
 
         \Illuminate\Support\Facades\View::composer(['client.dashboard', 'client.games', 'client.roadmap'], function (View $view): void {

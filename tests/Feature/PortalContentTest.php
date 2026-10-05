@@ -64,7 +64,7 @@ class PortalContentTest extends TestCase
         $matching = Game::factory()->create(['title' => 'Rocket Adventure']);
         Game::factory()->create(['title' => 'Ocean Adventure']);
         Game::factory()->create(['title' => 'Rocket Draft', 'is_published' => false]);
-        Game::factory()->for(Company::factory())->create(['title' => 'Private Rocket']);
+        $legacyAudience = Game::factory()->for(Company::factory())->create(['title' => 'Private Rocket']);
 
         $this->actingAs($client)->get('/dashboard')->assertOk()
             ->assertSee('action="'.route('search').'"', false)
@@ -73,7 +73,7 @@ class PortalContentTest extends TestCase
         $this->get('/search?search_category=games&q=rocket')
             ->assertRedirect(route('games.index', ['q' => 'rocket']));
         $this->get('/games?q=rocket')->assertOk()
-            ->assertViewHas('games', fn ($games) => $games->pluck('id')->all() === [$matching->id])
+            ->assertViewHas('games', fn ($games) => $games->pluck('id')->all() === [$legacyAudience->id, $matching->id])
             ->assertSee('value="rocket"', false);
     }
 
@@ -109,19 +109,19 @@ class PortalContentTest extends TestCase
         $this->getJson('/search?search_category=games&q='.str_repeat('a', 101))->assertUnprocessable()->assertJsonValidationErrors('q');
     }
 
-    public function test_catalog_filters_and_hides_drafts_and_other_companies(): void
+    public function test_catalog_filters_and_hides_drafts_without_legacy_company_restrictions(): void
     {
         $client = $this->client();
         $own = Game::factory()->create(['title' => 'Own rocket', 'category' => 'Crash', 'company_id' => $client->company_id]);
         $shared = Game::factory()->create(['title' => 'Shared rocket', 'category' => 'Crash']);
-        $private = Game::factory()->for(Company::factory())->create(['title' => 'Private rocket']);
+        $private = Game::factory()->for(Company::factory())->create(['title' => 'Private rocket', 'category' => 'Crash']);
         $draft = Game::factory()->create(['title' => 'Draft rocket', 'is_published' => false]);
         $slot = Game::factory()->create(['title' => 'Other category', 'category' => 'Slot']);
 
         $this->actingAs($client)->get('/games?q=rocket&category=Crash')->assertOk()
             ->assertSee($own->title)->assertSee($shared->title)
-            ->assertDontSee($private->title)->assertDontSee($draft->title)->assertDontSee($slot->title);
-        $this->get('/games/'.$private->slug)->assertNotFound();
+            ->assertSee($private->title)->assertDontSee($draft->title)->assertDontSee($slot->title);
+        $this->get('/games/'.$private->slug)->assertOk();
         $this->get('/games/'.$draft->slug)->assertNotFound();
         $this->get('/games/'.$own->slug)->assertOk();
     }
@@ -162,7 +162,9 @@ class PortalContentTest extends TestCase
         Storage::disk('local')->put('demo/marketing-pack.txt', 'demo');
         $game = Game::factory()->create();
         $resource = ResourceItem::factory()->for($game)->create(['file_path' => 'demo/marketing-pack.txt']);
-        $this->actingAs($this->client())->get('/resource/'.$resource->id.'/download')->assertOk();
+        $user = $this->client();
+        $user->company->purchasedGames()->attach($game);
+        $this->actingAs($user)->get('/resource/'.$resource->id.'/download')->assertOk();
         $game->update(['is_published' => false]);
         $this->get('/resource/'.$resource->id.'/download')->assertNotFound();
     }

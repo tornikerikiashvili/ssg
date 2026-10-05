@@ -46,6 +46,7 @@ class RoadmapIntegrationTest extends TestCase
         $this->get('/games/'.$game->slug)->assertOk()->assertDontSee($asset->title);
         $this->get('/resource/'.$asset->id.'/download')->assertNotFound();
         $this->post('/assets/basket/archive', ['ids' => [$asset->id]])->assertNotFound();
+        $user->company->purchasedGames()->attach($game);
         $game->update(['release_status' => 'released']);
         $this->get('/resource/'.$asset->id.'/download')->assertOk();
         $milestone->update(['progress' => null]);
@@ -67,7 +68,7 @@ class RoadmapIntegrationTest extends TestCase
         $private = Game::factory()->for(Company::factory())->create(['title' => 'Private game']);
         RoadmapItem::factory()->create(['game_id' => $private->id, 'title' => 'Private game launch']);
         $this->actingAs($user)->get('/roadmap')->assertOk()->assertSee('Allowed regional launch')->assertSee('Upcoming:')
-            ->assertDontSee('Private regional launch')->assertDontSee('Private region')->assertDontSee('Draft milestone')->assertDontSee('Private game');
+            ->assertDontSee('Private regional launch')->assertDontSee('Private region')->assertDontSee('Draft milestone')->assertSee('Private game launch');
         $this->get('/games/'.$game->slug)->assertNotFound();
     }
 
@@ -78,7 +79,8 @@ class RoadmapIntegrationTest extends TestCase
         Announcement::factory()->create(['title' => 'Roadmap news only', 'show_on_dashboard' => false, 'show_on_roadmap' => true]);
         Announcement::factory()->create(['title' => 'Shared news', 'show_on_dashboard' => true, 'show_on_roadmap' => true]);
         Announcement::factory()->for(Company::factory())->create(['title' => 'Private news', 'show_on_roadmap' => true]);
-        $this->actingAs($user)->get('/roadmap')->assertOk()->assertSee('Roadmap news only')->assertSee('Shared news')->assertDontSee('Dashboard news only')->assertDontSee('Private news');
+        $this->actingAs($user)->get('/roadmap')->assertOk()->assertSee('Roadmap news only')->assertSee('Shared news')->assertDontSee('Private news')
+            ->assertViewHas('announcements', fn ($news) => ! $news->contains('title', 'Dashboard news only'));
         $this->get('/dashboard')->assertViewHas('announcements', fn ($news) => $news->pluck('title')->sort()->values()->all() === ['Dashboard news only', 'Shared news']);
     }
 

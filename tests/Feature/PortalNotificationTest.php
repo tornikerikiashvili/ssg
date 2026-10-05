@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Filament\Resources\PortalNotifications\Pages\ManagePortalNotifications;
 use App\Models\Announcement;
 use App\Models\Company;
+use App\Models\Game;
 use App\Models\PortalNotification;
 use App\Models\ResourceItem;
 use App\Models\User;
@@ -38,6 +39,7 @@ class PortalNotificationTest extends TestCase
                     'title' => class_basename($model).' item '.$index,
                     'created_at' => now()->subDays(9 - $index),
                     'is_published' => $index !== 8,
+                    ...($model === Announcement::class ? ['show_on_dashboard' => $index !== 8, 'show_on_roadmap' => false] : []),
                     'company_id' => $index === 8 ? $company->id : null,
                 ]);
             }
@@ -104,6 +106,27 @@ class PortalNotificationTest extends TestCase
         $this->get('/dashboard')->assertRedirect('/login');
     }
 
+    public function test_header_announcements_are_consistent_on_every_client_page(): void
+    {
+        $user = User::factory()->for(Company::factory())->create();
+        $game = Game::factory()->create();
+        Announcement::factory()->create(['title' => 'Old header announcement', 'created_at' => now()->subDays(10)]);
+        $announcements = Announcement::factory()->count(4)->sequence(fn ($sequence) => [
+            'title' => 'Header announcement '.$sequence->index, 'created_at' => now()->subDays(4 - $sequence->index),
+        ])->create(['show_on_dashboard' => true]);
+        Announcement::factory()->for(Company::factory())->create(['title' => 'Private header announcement']);
+        Announcement::factory()->create(['title' => 'Draft header announcement', 'show_on_dashboard' => false, 'show_on_roadmap' => false]);
+        Announcement::factory()->create(['title' => 'Roadmap placement only', 'show_on_dashboard' => false, 'show_on_roadmap' => true]);
+        $this->actingAs($user);
+
+        foreach (['/dashboard', '/games', '/games/'.$game->slug, '/resources/download', '/resources/documentation', '/engagement-tools', '/roadmap'] as $path) {
+            $document = HTMLDocument::createFromString($this->get($path)->assertOk()->getContent(), LIBXML_NOERROR);
+            $header = $document->querySelector('#notifications');
+            $titles = array_map(fn ($item) => $item->textContent, iterator_to_array($header->querySelectorAll('.notifications_item-top > p:first-child')));
+            $this->assertSame($announcements->reverse()->pluck('title')->values()->all(), $titles, $path);
+        }
+    }
+
     public function test_documentation_feed_matches_dashboard_content_and_audience_rules(): void
     {
         $user = User::factory()->for(Company::factory())->create();
@@ -112,7 +135,7 @@ class PortalNotificationTest extends TestCase
         PortalNotification::factory()->create(['title' => 'Draft notification', 'is_published' => false]);
         Announcement::factory()->create(['title' => 'Partner announcement', 'teaser' => 'Announcement teaser', 'color' => 'green', 'company_id' => $user->company_id]);
         Announcement::factory()->for(Company::factory())->create(['title' => 'Private announcement']);
-        Announcement::factory()->create(['title' => 'Draft announcement', 'is_published' => false]);
+        Announcement::factory()->create(['title' => 'Draft announcement', 'show_on_dashboard' => false, 'show_on_roadmap' => false]);
         Announcement::factory()->create(['title' => 'Roadmap only announcement', 'show_on_dashboard' => false]);
 
         $dashboard = HTMLDocument::createFromString($this->actingAs($user)->get('/dashboard')->assertOk()->getContent(), LIBXML_NOERROR);

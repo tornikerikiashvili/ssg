@@ -25,6 +25,11 @@ class Company extends Model
         return $this->hasMany(User::class);
     }
 
+    public function purchasedGames(): BelongsToMany
+    {
+        return $this->belongsToMany(Game::class, 'company_game');
+    }
+
     public function regions(): BelongsToMany
     {
         return $this->belongsToMany(Region::class);

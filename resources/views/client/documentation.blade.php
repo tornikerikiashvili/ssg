@@ -23,15 +23,7 @@
             <x-sort-filter :options="['name' => 'Name', 'newest' => 'Newest']" />
           </form>
         </div>
-        <div class="assets_list">@forelse($resources as $resource)<a href="{{ route('resources.download', $resource->id) }}" class="docs_item w-inline-block">
-            <p class="tag">{{ $resource->catalogOption?->name ?? 'Document' }}{{ $resource->is_demo ? ' · Demo' : '' }}</p>
-            <div class="wrapper-vertical-xs">
-              <p class="text-weight-semibold">{{ $resource->title }}</p>
-              <p class="text-size-small">{{ $resource->description }}</p>
-            </div><span class="card-button">
-              <p>Download</p>
-            </span>
-          </a>@empty<p>No documents available.</p>@endforelse</div><x-pagination :records="$resources" />
+        <div class="assets_list">@forelse($resources as $resource)<x-documentation-card :document="$resource" />@empty<p>No documents available.</p>@endforelse</div><x-pagination :records="$resources" />
         <div data-collapsing="" class="dashboard-row is-resources">
           <div data-collapsing="" data-tabs="" class="dashboard_block is-docs-notifications">
             <div no-scrollbar="" class="dashboard_block-header-wrapper">

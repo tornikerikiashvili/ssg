@@ -36,9 +36,8 @@ class UserResource extends Resource
                 ->dehydrateStateUsing(fn (string $state): string => Str::lower(trim($state)))
                 ->unique(ignoreRecord: true),
             Select::make('company_id')->relationship('company', 'name')->searchable()->preload()
-                ->required(fn (?User $record): bool => ! $record?->is_admin),
-            Select::make('regions')->relationship('regions', 'name')->multiple()->searchable()->preload()
-                ->helperText('Leave empty to inherit company regions. Selected regions narrow access to those also assigned to the company.'),
+                ->required(fn (?User $record): bool => ! $record?->is_admin)
+                ->helperText('Users inherit the regions configured for their company.'),
             TextInput::make('password')->password()->revealable()->minLength(12)->maxLength(255)
                 ->required(fn (string $operation): bool => $operation === 'create')
                 ->dehydrated(fn (?string $state): bool => filled($state))

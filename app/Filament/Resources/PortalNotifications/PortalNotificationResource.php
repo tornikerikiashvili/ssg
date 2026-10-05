@@ -45,7 +45,6 @@ class PortalNotificationResource extends Resource
 
             Select::make('company_id')->relationship('company', 'name')->searchable()->preload()->label('Audience company')->placeholder('All partner companies')->helperText('Leave empty to share with all active partner companies.'),
             Toggle::make('is_published')->label('Published to client area'),
-            Toggle::make('is_demo')->label('Sample / demo content'),
         ]);
     }
 
@@ -55,7 +54,6 @@ class PortalNotificationResource extends Resource
             TextColumn::make('title')->searchable()->sortable()->limit(45),
             TextColumn::make('company.name')->label('Audience')->placeholder('All partners'),
             IconColumn::make('is_published')->label('Published')->boolean(),
-            IconColumn::make('is_demo')->label('Demo')->boolean(),
             TextColumn::make('updated_at')->since()->sortable(),
         ])->filters([
             TernaryFilter::make('is_published'),

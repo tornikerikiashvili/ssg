@@ -78,7 +78,9 @@ class DropboxIntegrationTest extends TestCase
         $this->assertSame('id:folder', $game->fresh()->dropbox_folder_id);
         $this->assertNotNull($game->fresh()->dropbox_synced_at);
         $this->assertNull($game->fresh()->dropbox_sync_error);
-        $this->actingAs(User::factory()->for(Company::factory())->create())->get('/games/'.$game->slug)->assertOk()->assertSee('logo.svg')->assertSee('Logos');
+        $user = User::factory()->for(Company::factory())->create();
+        $user->company->purchasedGames()->attach($game);
+        $this->actingAs($user)->get('/games/'.$game->slug)->assertOk()->assertSee('logo.svg')->assertSee('Logos');
     }
 
     #[TestWith(['WEBP', 'image'])]
@@ -124,7 +126,9 @@ class DropboxIntegrationTest extends TestCase
         ResourceItem::factory()->for($game)->create(['kind' => 'download', 'catalog_option_id' => $archived->id, 'dropbox_file_id' => 'id:archived', 'dropbox_available' => false]);
         ResourceItem::factory()->for($game)->create(['kind' => 'download', 'catalog_option_id' => $private->id, 'dropbox_file_id' => 'id:private', 'is_published' => false]);
 
-        $response = $this->actingAs(User::factory()->for(Company::factory())->create())->get($url);
+        $user = User::factory()->for(Company::factory())->create();
+        $user->company->purchasedGames()->attach($game);
+        $response = $this->actingAs($user)->get($url);
 
         $response->assertOk()->assertViewHas('assetCategories', [$logos->id => 'Dropbox Logos']);
     }
@@ -186,6 +190,7 @@ class DropboxIntegrationTest extends TestCase
         $game = Game::factory()->create(['dropbox_folder_path' => '/Games/Game1/assets']);
         $asset = ResourceItem::factory()->for($game)->create(['dropbox_file_id' => 'id:file', 'file_path' => 'logo.svg', 'file_size' => 7]);
         $user = User::factory()->for(Company::factory())->create();
+        $user->company->purchasedGames()->attach($game);
         $this->fakeHttp(['*/files/download' => fn () => Http::response('content')]);
         $this->actingAs($user);
         $this->get('/resource/'.$asset->id.'/download')->assertOk()->assertStreamedContent('content');
@@ -199,7 +204,7 @@ class DropboxIntegrationTest extends TestCase
         $this->assertDatabaseCount('resource_downloads', 2);
 
         $this->fakeHttp();
-        $game->update(['company_id' => Company::factory()->create()->id]);
+        $user->company->purchasedGames()->detach($game);
         $this->get('/resource/'.$asset->id.'/download')->assertNotFound();
         $this->post('/assets/basket/archive', ['ids' => [$asset->id]])->assertNotFound();
         Http::assertNothingSent();
@@ -209,7 +214,9 @@ class DropboxIntegrationTest extends TestCase
     {
         $asset = ResourceItem::factory()->for(Game::factory())->create(['dropbox_file_id' => 'id:file', 'file_path' => 'logo.svg']);
         $this->fakeHttp(['*/files/download' => Http::response([], 401)]);
-        $this->actingAs(User::factory()->for(Company::factory())->create());
+        $user = User::factory()->for(Company::factory())->create();
+        $user->company->purchasedGames()->attach($asset->game_id);
+        $this->actingAs($user);
         $this->get('/resource/'.$asset->id.'/download')->assertStatus(502);
         $this->assertDatabaseCount('resource_downloads', 0);
         $asset->update(['dropbox_available' => false]);

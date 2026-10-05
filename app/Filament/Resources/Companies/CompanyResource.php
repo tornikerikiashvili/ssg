@@ -13,6 +13,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
 use UnitEnum;
 
 class CompanyResource extends Resource
@@ -29,6 +30,8 @@ class CompanyResource extends Resource
             TextInput::make('name')->required()->maxLength(255),
             Select::make('regions')->relationship('regions', 'name')->multiple()->searchable()->preload()
                 ->helperText('Regional permissions inherited by company users. With no regions, only games without regional restrictions are accessible.'),
+            Select::make('purchasedGames')->label('Bought games')->relationship('purchasedGames', 'title', modifyQueryUsing: fn (Builder $query): Builder => $query->select(['games.id', 'games.title']))
+                ->multiple()->searchable()->preload()->helperText('Select the games purchased by this company.'),
             Toggle::make('is_active')->default(true)->helperText('Disabling a company revokes access for all of its partner users.'),
         ]);
     }

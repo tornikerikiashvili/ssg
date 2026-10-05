@@ -11,6 +11,7 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
@@ -37,15 +38,14 @@ class AnnouncementResource extends Resource
             TextInput::make('title')->required()->maxLength(255),
             TextInput::make('teaser')->maxLength(255)->helperText('Short summary shown between the title and description.'),
             Textarea::make('description')->rows(5)->maxLength(20000)->columnSpanFull(),
-            Select::make('color')->label('Color')->options(Announcement::NOTIFICATION_COLORS)->required()->default('green')->in(array_keys(Announcement::NOTIFICATION_COLORS)),
-
-            Toggle::make('show_on_dashboard')->label('Show on Dashboard')->default(true),
-            Toggle::make('show_on_roadmap')->label('Show on Roadmap')->default(false),
-            Select::make('priority')->options(['info' => 'Information', 'important' => 'Important'])->required()->default('info'),
-
-            Select::make('company_id')->relationship('company', 'name')->searchable()->preload()->label('Audience company')->placeholder('All partner companies')->helperText('Leave empty to share with all active partner companies.'),
-            Toggle::make('is_published')->label('Published to client area'),
-            Toggle::make('is_demo')->label('Sample / demo content'),
+            Section::make('Settings')->schema([
+                Select::make('color')->label('Color')->options(Announcement::NOTIFICATION_COLORS)->required()->default('green')->in(array_keys(Announcement::NOTIFICATION_COLORS)),
+                Select::make('priority')->options(['info' => 'Information', 'important' => 'Important'])->required()->default('info'),
+                Select::make('company_id')->relationship('company', 'name')->searchable()->preload()->label('Audience company')->placeholder('All partner companies')
+                    ->helperText('Leave empty to share with all active partner companies.')->columnSpanFull(),
+                Toggle::make('show_on_dashboard')->label('Show on Dashboard')->default(true),
+                Toggle::make('show_on_roadmap')->label('Show on Roadmap')->default(false),
+            ])->description('Enable at least one page to make the announcement visible to clients.')->columns(2)->columnSpanFull(),
         ]);
     }
 
@@ -55,11 +55,12 @@ class AnnouncementResource extends Resource
             TextColumn::make('title')->searchable()->sortable()->limit(45),
             TextColumn::make('priority')->badge(),
             TextColumn::make('company.name')->label('Audience')->placeholder('All partners'),
-            IconColumn::make('is_published')->label('Published')->boolean(),
-            IconColumn::make('is_demo')->label('Demo')->boolean(),
+            IconColumn::make('show_on_dashboard')->label('Dashboard')->boolean(),
+            IconColumn::make('show_on_roadmap')->label('Roadmap')->boolean(),
             TextColumn::make('updated_at')->since()->sortable(),
         ])->filters([
-            TernaryFilter::make('is_published'),
+            TernaryFilter::make('show_on_dashboard')->label('Dashboard'),
+            TernaryFilter::make('show_on_roadmap')->label('Roadmap'),
             SelectFilter::make('company_id')->relationship('company', 'name')->label('Company'),
 
         ])->recordActions([EditAction::make(), DeleteAction::make()])

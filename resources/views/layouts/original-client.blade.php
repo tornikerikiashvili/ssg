@@ -519,9 +519,9 @@
                     </div>
                   </div>
                   <div data-tab-pane="">
-                    <div class="notifications_list">@isset($announcements) @forelse($announcements as $announcement)
+                    <div class="notifications_list">@forelse($headerAnnouncements as $announcement)
 <div class="notifications_item"><div class="notifications_item-top"><p class="{{ $announcement->notificationColorClass() }} text-weight-semibold text-size-medium">{{ $announcement->title }}</p><p>{{ $announcement->created_at->diffForHumans() }}</p></div>@if(filled($announcement->teaser))<p class="text-color-text">{{ $announcement->teaser }}</p>@endif<p>{{ \Illuminate\Support\Str::limit($announcement->description, 140) }}</p><div class="notifications_item-line {{ $announcement->notificationColorClass() }}"></div></div>
-@empty<p class="text-color-subtitles">No announcements available.</p>@endforelse @endisset
+@empty<p class="text-color-subtitles">No announcements available.</p>@endforelse
 <a href="{{ route('updates.index') }}">View all updates</a></div>
                   </div>
                 </div>

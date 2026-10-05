@@ -48,9 +48,10 @@ class RegionAccessTest extends TestCase
         Livewire::test(ManageCompanies::class)
             ->callAction(TestAction::make('edit')->table($company), data: ['regions' => [$region->id]])->assertHasNoActionErrors();
         Livewire::test(ManageUsers::class)
-            ->callAction(TestAction::make('edit')->table($user), data: ['regions' => [$region->id]])->assertHasNoActionErrors();
+            ->mountAction(TestAction::make('edit')->table($user))
+            ->assertFormFieldDoesNotExist('regions');
         $this->assertSame([$region->id], $company->regions()->pluck('regions.id')->all());
-        $this->assertSame([$region->id], $user->regions()->pluck('regions.id')->all());
+        $this->assertSame([$region->id], $user->accessibleRegionIds());
         $availability = GameRegion::factory()->for($region)->create();
 
         Livewire::test(ManageRegions::class)->callAction(TestAction::make('edit')->table($region), data: ['country_code' => 'DE'])
@@ -59,7 +60,7 @@ class RegionAccessTest extends TestCase
         $this->get('/admin/regions')->assertForbidden();
     }
 
-    public function test_user_regions_narrow_company_permissions_and_revocation_applies_immediately(): void
+    public function test_users_inherit_company_regions_ignoring_legacy_overrides_and_revocation_applies_immediately(): void
     {
         $regions = Region::factory()->count(3)->create();
         $user = User::factory()->for(Company::factory())->create();
@@ -73,21 +74,39 @@ class RegionAccessTest extends TestCase
         $draft = Game::factory()->create(['is_published' => false]);
         $this->actingAs($user);
 
-        $this->assertEqualsCanonicalizing([$global->id, $available->game_id, $limited->game_id], Game::visibleTo($user)->pluck('id')->all());
-        $user->regions()->sync([$regions[1]->id, $regions[2]->id]);
-        $this->assertEqualsCanonicalizing([$global->id, $limited->game_id], Game::visibleTo($user)->pluck('id')->all());
-        $this->get('/games/'.$available->game->slug)->assertNotFound();
+        $this->assertEqualsCanonicalizing([$global->id, $private->id, $available->game_id, $limited->game_id], Game::visibleTo($user)->pluck('id')->all());
+        DB::table('region_user')->insert(['user_id' => $user->id, 'region_id' => $regions[2]->id]);
+        $this->assertEqualsCanonicalizing([$global->id, $private->id, $available->game_id, $limited->game_id], Game::visibleTo($user)->pluck('id')->all());
+        $this->get('/games/'.$available->game->slug)->assertOk();
         $this->get('/games/'.$outside->game->slug)->assertNotFound();
         $this->get('/games/'.$unavailable->game->slug)->assertNotFound();
-        $this->get('/games/'.$private->slug)->assertNotFound();
+        $this->get('/games/'.$private->slug)->assertOk();
         $this->get('/games/'.$draft->slug)->assertNotFound();
 
         $user->company->regions()->detach($regions[1]);
         $this->get('/games/'.$limited->game->slug)->assertNotFound();
-        $user->regions()->detach();
         $this->get('/games/'.$available->game->slug)->assertOk();
         $user->company->regions()->detach();
-        $this->assertSame([$global->id], Game::visibleTo($user)->pluck('id')->all());
+        $this->assertEqualsCanonicalizing([$global->id, $private->id], Game::visibleTo($user)->pluck('id')->all());
+    }
+
+    public function test_changing_company_switches_inherited_regions_for_the_user(): void
+    {
+        $regions = Region::factory()->count(2)->create();
+        $first = Company::factory()->create();
+        $second = Company::factory()->create();
+        $first->regions()->attach($regions[0]);
+        $second->regions()->attach($regions[1]);
+        $user = User::factory()->for($first)->create();
+        $colleague = User::factory()->for($first)->create();
+        $this->assertSame([$regions[0]->id], $user->accessibleRegionIds());
+        $this->assertSame($user->accessibleRegionIds(), $colleague->accessibleRegionIds());
+        $user->load('company');
+        $user->forceFill(['company_id' => $second->id])->save();
+        $this->assertSame([$regions[1]->id], $user->accessibleRegionIds());
+        $this->assertSame([$regions[0]->id], $colleague->accessibleRegionIds());
+        $user->forceFill(['company_id' => null])->save();
+        $this->assertSame([], $user->accessibleRegionIds());
     }
 
     public function test_regional_restrictions_cover_catalog_dashboard_documents_and_download_endpoints(): void
@@ -99,6 +118,7 @@ class RegionAccessTest extends TestCase
         $asset = ResourceItem::factory()->for($game)->create(['kind' => 'download', 'file_path' => 'game-assets/regional.pdf']);
         $document = ResourceItem::factory()->for($game)->create(['kind' => 'documentation', 'file_path' => 'game-assets/regional.pdf']);
         $user = User::factory()->for(Company::factory())->create();
+        $user->company->purchasedGames()->attach($game);
         $this->actingAs($user);
 
         $this->get('/games')->assertViewHas('games', fn ($games): bool => $games->isEmpty());

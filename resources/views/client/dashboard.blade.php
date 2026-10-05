@@ -51,13 +51,15 @@
                   </svg>
                 </div>
               </a>
-              <a href="{{ route('games.show', $featuredGame->slug) }}#resources" class="button is-secondary w-inline-block">
+              @if($featuredGame->canAccessAssets(auth()->user()))
+<a href="{{ route('games.show', $featuredGame->slug) }}#resources" class="button is-secondary w-inline-block">
                 <div class="button_icon w-embed"><svg width="24" viewbox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                     <path d="M5.05713 20.8364V3.16364L18.9429 12L5.05713 20.8364Z"></path>
                   </svg>
                 </div>
                 <p class="button_text">Game Assets</p>
               </a>
+              @endif
             </div>
             <div class="banner_image-wrapper">@if($featuredGame->cover_image_url)<img src="{{ $featuredGame->cover_image_url }}" alt="{{ $featuredGame->title }}" class="fullsize-img">@endif</div>
           </div>@else<div class="banner"><p class="banner_category">Featured Game</p><p class="banner_title">No featured games yet</p></div>@endif
@@ -104,7 +106,7 @@
             <div class="dashboard_block">
               <div no-scrollbar="" class="dashboard_block-header">
                 <a href="#" class="tab-link is-active w-inline-block">
-                  <p>Recently added</p>
+                  <p>Trending Now</p>
                   <div class="tab-link_line"></div>
                 </a>
               </div>
@@ -132,7 +134,7 @@
                 <div class="tab-link_line"></div>
               </a>
             </div>
-            <p class="text-color-subtitles">Total {{ $gameCount }} Games.</p>
+            <p class="text-color-subtitles">Total {{ $purchasedGameCount }} Games.</p>
             <div class="dashboard_games-list">@forelse($games as $game)<div class="dashboard_games-item"><img src="{{ $game->cover_image_url ?: asset('client-design/images/Logo-icon.svg') }}" loading="lazy" width="70" height="90" alt="{{ $game->title }}" class="dashboard_games-image">
                 <div class="dashboard_games-item-inner">
                   <div>
@@ -147,13 +149,15 @@
                         </svg>
                       </div>
                     </a>
-                    <a href="{{ route('games.show', $game->slug) }}#resources" class="card-button w-inline-block">
+                    @if($game->canAccessAssets(auth()->user()))
+<a href="{{ route('games.show', $game->slug) }}#resources" class="card-button w-inline-block">
                       <p class="button_text">Assets</p>
                       <div class="button_icon w-embed"><svg width="21" viewbox="0 0 21 21" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
                           <path fill-rule="evenodd" clip-rule="evenodd" d="M7.28851 8.62951C6.86291 8.95363 6.64928 9.53626 6.86978 10.1139C7.12731 10.7886 7.63324 11.4086 8.19911 11.8883C8.77126 12.3733 9.48722 12.7854 10.2481 12.9756C10.4135 13.017 10.5865 13.017 10.752 12.9756C11.5128 12.7854 12.2287 12.3733 12.8009 11.8883C13.3668 11.4086 13.8727 10.7886 14.1302 10.1139C14.3507 9.53626 14.1371 8.95363 13.7115 8.62951C13.3276 8.33719 12.8216 8.27984 12.3829 8.4483C12.1379 8.54243 11.8312 8.64463 11.5003 8.72256V4.52527C11.5003 3.97298 11.0526 3.52527 10.5003 3.52527C9.94806 3.52527 9.50035 3.97298 9.50035 4.52527V8.72273C9.16925 8.64477 8.86228 8.54249 8.61705 8.4483C8.17844 8.27983 7.67236 8.33719 7.28851 8.62951ZM5.49902 13.9731C5.49902 13.4207 5.05131 12.973 4.49902 12.973C3.94674 12.973 3.49902 13.4207 3.49902 13.9731V14.8069C3.49902 15.5492 3.82639 16.2377 4.36955 16.7283C4.90934 17.2159 5.62154 17.4747 6.34547 17.4747H14.6545C15.3784 17.4747 16.0906 17.2159 16.6304 16.7283C17.1736 16.2377 17.5009 15.5492 17.5009 14.8069V13.9731C17.5009 13.4207 17.0532 12.973 16.5009 12.973C15.9486 12.973 15.5009 13.4207 15.5009 13.9731V14.8069C15.5009 14.9493 15.4392 15.1092 15.2898 15.2441C15.1371 15.3821 14.91 15.4747 14.6545 15.4747H6.34547C6.08998 15.4747 5.86288 15.3821 5.71012 15.2441C5.56073 15.1092 5.49902 14.9493 5.49902 14.8069V13.9731Z"></path>
                         </svg>
                       </div>
                     </a>
+              @endif
                   </div>
                 </div>
               </div>@empty<p class="text-color-subtitles">No games available.</p>@endforelse</div>
@@ -161,7 +165,7 @@
           <div class="dashboard_block is-highlighted">
             <div no-scrollbar="" class="dashboard_block-header">
               <a href="#" class="tab-link is-active w-inline-block">
-                <p>Featured for your company</p>
+                <p>Available in your Region</p>
                 <div class="tab-link_line"></div>
               </a>
               <a href="{{ route('games.index') }}" class="tab-link is-right w-inline-block">
@@ -169,8 +173,8 @@
                 <div class="tab-link_line"></div>
               </a>
             </div>
-            <p class="text-color-subtitles">Total {{ $featuredCount }} Featured.</p>
-            <div class="dashboard_games-list">@forelse($featuredGames as $game)<div class="dashboard_games-item"><img src="{{ $game->cover_image_url ?: asset('client-design/images/Logo-icon.svg') }}" loading="lazy" width="70" height="90" alt="{{ $game->title }}" class="dashboard_games-image">
+            <p class="text-color-subtitles">Total {{ $availableGameCount }} Available.</p>
+            <div class="dashboard_games-list">@forelse($availableGames as $game)<div class="dashboard_games-item"><img src="{{ $game->cover_image_url ?: asset('client-design/images/Logo-icon.svg') }}" loading="lazy" width="70" height="90" alt="{{ $game->title }}" class="dashboard_games-image">
                 <div class="dashboard_games-item-inner">
                   <div>
                     <p class="text-size-large">{{ $game->title }}</p>
