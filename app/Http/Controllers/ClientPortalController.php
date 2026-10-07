@@ -24,6 +24,22 @@ use ZipArchive;
 
 class ClientPortalController extends Controller
 {
+    public function assetPreview(Request $request, int $resourceItem, DropboxThumbnail $thumbnails): Response|RedirectResponse
+    {
+        $resource = ResourceItem::visibleTo($request->user())->findOrFail($resourceItem);
+        $headers = ['Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff'];
+        if (($bytes = $thumbnails->get($resource)) !== null) {
+            return response($bytes, 200, ['Content-Type' => 'image/png'] + $headers);
+        }
+        if ($iconUrl = ($resource->fileFormat?->getFirstMediaUrl('list_icon') ?: $resource->fileFormat?->getFirstMediaUrl('icon'))) {
+            return redirect()->away($iconUrl, 302, $headers);
+        }
+
+        return response(view('components.asset-file-icon', [
+            'extension' => pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION),
+        ])->render(), 200, ['Content-Type' => 'image/svg+xml'] + $headers);
+    }
+
     public function thumbnail(Request $request, int $resourceItem, DropboxThumbnail $thumbnails): Response
     {
         $resource = ResourceItem::visibleTo($request->user())->findOrFail($resourceItem);

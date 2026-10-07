@@ -2672,6 +2672,9 @@ figcaption {
 .downloads_icon {
   flex: none;
   width: 34px;
+  height: 34px;
+  object-fit: contain;
+  background-color: transparent;
 }
 
 .downloads_info-line {
@@ -3147,6 +3150,12 @@ figcaption {
   height: 100%;
   object-fit: contain;
   background-color: transparent;
+}
+
+.assets_item-thumbnail-jpeg,
+.downloads_icon-jpeg {
+  object-fit: cover;
+  object-position: center;
 }
 
 .assets_item-checkbox.is-active {

@@ -1,5 +1,5 @@
 @props(['downloads'])
-<div class="downloads_list">@forelse($downloads as $download)<div class="downloads_item"><img src="{{ asset('client-design/images/Zip.svg') }}" loading="lazy" width="34" height="34" alt="Icon" class="downloads_icon">
+<div class="downloads_list">@forelse($downloads as $download)<div class="downloads_item">@if($download->resource)<img src="{{ route('resources.preview', $download->resource_item_id) }}" loading="lazy" width="34" height="34" alt="{{ $download->resource_title }} preview" @class(['downloads_icon', 'downloads_icon-jpeg' => $download->resource->supportsDropboxThumbnail() && in_array(strtolower(pathinfo($download->resource->file_path ?? '', PATHINFO_EXTENSION)), ['jpg', 'jpeg'], true)]) onerror="this.style.display='none'; this.nextElementSibling.hidden=false;"><span class="downloads_icon" hidden><x-asset-file-icon :extension="$download->file_type ?? ''" /></span>@else<span class="downloads_icon"><x-asset-file-icon :extension="$download->file_type ?? ''" /></span>@endif
                 <div class="downloads_inner">
                   <p class="text-weight-semibold">{{ $download->resource_title ?? 'Deleted asset' }}</p>
                   <div class="downloads_info-line">

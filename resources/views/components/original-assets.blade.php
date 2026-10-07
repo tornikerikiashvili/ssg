@@ -12,7 +12,7 @@
                     @endif
                   </div>
                   @if($resource->supportsDropboxThumbnail())
-                    <img src="{{ route('resources.thumbnail', $resource->id) }}" class="assets_item-icon assets_item-thumbnail" width="90" height="90" alt="{{ $resource->title }} preview" loading="lazy" decoding="async" style="opacity:0" onload="this.style.opacity='1'; this.previousElementSibling.style.visibility='hidden';" onerror="this.remove();">
+                    <img src="{{ route('resources.thumbnail', $resource->id) }}" @class(['assets_item-icon', 'assets_item-thumbnail', 'assets_item-thumbnail-jpeg' => in_array(strtolower(pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION)), ['jpg', 'jpeg'], true)]) width="90" height="90" alt="{{ $resource->title }} preview" loading="lazy" decoding="async" style="opacity:0" onload="this.style.opacity='1'; this.previousElementSibling.style.visibility='hidden';" onerror="this.remove();">
                   @endif
                   <div class="assets_item-checkbox"></div>
                 </div>

@@ -6,6 +6,7 @@ use App\Filament\Resources\FileFormats\Pages\ManageFileFormats;
 use App\Models\Company;
 use App\Models\FileFormat;
 use App\Models\Game;
+use App\Models\ResourceDownload;
 use App\Models\ResourceItem;
 use App\Models\User;
 use App\SyncDropboxGame;
@@ -69,6 +70,7 @@ class AssetPreviewTest extends TestCase
         $url = route('resources.thumbnail', $asset);
 
         $this->get($url)->assertOk()->assertHeader('Content-Type', 'image/png')->assertContent($png);
+        $this->get(route('resources.preview', $asset))->assertOk()->assertHeader('Content-Type', 'image/png')->assertContent($png);
         config(['services.dropbox.access_token' => null]);
         $this->get($url)->assertOk()->assertContent($png);
         Http::assertSentCount(1);
@@ -99,6 +101,7 @@ class AssetPreviewTest extends TestCase
         $this->actingAs($owner)->get($url)->assertOk();
 
         $this->actingAs(User::factory()->for(Company::factory())->create())->get($url)->assertNotFound();
+        $this->get(route('resources.preview', $asset))->assertNotFound();
         $owner->company->purchasedGames()->detach($asset->game_id);
         $this->actingAs($owner)->get($url)->assertNotFound();
         $owner->company->purchasedGames()->attach($asset->game_id);
@@ -173,6 +176,34 @@ class AssetPreviewTest extends TestCase
         $this->actingAs($user)->get('/games/'.$game->slug)->assertSee($icon->getUrl());
     }
 
+    public function test_recent_downloads_and_basket_previews_use_custom_and_standard_icons(): void
+    {
+        Storage::fake('public');
+        $format = FileFormat::factory()->create(['extension' => 'mp4']);
+        $icon = $format->addMedia(UploadedFile::fake()->image('video.png'))->toMediaCollection('icon');
+        $asset = $this->imageAsset(['file_path' => 'video.mp4', 'file_format_id' => $format->id]);
+        $user = User::factory()->for(Company::factory())->create();
+        $user->company->purchasedGames()->attach($asset->game_id);
+        ResourceDownload::create(['user_id' => $user->id, 'resource_item_id' => $asset->id]);
+        $this->actingAs($user);
+
+        $this->get(route('resources.preview', $asset))->assertRedirect($icon->getUrl());
+        $this->get('/dashboard')->assertOk()->assertSee(route('resources.preview', $asset));
+        $this->blade('<x-asset-basket />')->assertSee(json_encode(route('resources.preview', '__RESOURCE__')), false);
+
+        $listIcon = $format->addMedia(UploadedFile::fake()->image('video-list.png'))->toMediaCollection('list_icon');
+        $this->get(route('resources.preview', $asset))->assertRedirect($listIcon->getUrl());
+        $this->blade('<x-original-assets :resources="$resources" />', ['resources' => collect([$asset->fresh()])])
+            ->assertSee($icon->getUrl())->assertDontSee($listIcon->getUrl());
+        $format->clearMediaCollection('list_icon');
+        $this->get(route('resources.preview', $asset))->assertRedirect($icon->getUrl());
+
+        $format->clearMediaCollection('icon');
+        $this->get(route('resources.preview', $asset))->assertOk()
+            ->assertHeader('Content-Type', 'image/svg+xml')->assertSee('data-file-icon="video"', false);
+        Http::assertNothingSent();
+    }
+
     public function test_admin_can_upload_an_svg_format_icon(): void
     {
         Storage::fake('public');
@@ -183,12 +214,17 @@ class AssetPreviewTest extends TestCase
         Livewire::test(ManageFileFormats::class)
             ->callAction(TestAction::make('edit')->table($format), data: [
                 'icon' => UploadedFile::fake()->createWithContent('video.svg', $svg),
+                'list_icon' => UploadedFile::fake()->createWithContent('video-list.svg', $svg),
             ])->assertHasNoActionErrors();
 
         $icon = $format->fresh()->getFirstMedia('icon');
         $this->assertNotNull($icon);
         $this->assertSame('image/svg+xml', $icon->mime_type);
         $this->assertSame($svg, Storage::disk('public')->get($icon->getPathRelativeToRoot()));
+        $listIcon = $format->fresh()->getFirstMedia('list_icon');
+        $this->assertNotNull($listIcon);
+        $this->assertNotSame($icon->id, $listIcon->id);
+        $this->assertSame($svg, Storage::disk('public')->get($listIcon->getPathRelativeToRoot()));
         $resource = ResourceItem::factory()->make(['file_format_id' => $format->id, 'file_path' => 'video.mp4', 'id' => 1]);
         $this->blade('<x-original-assets :resources="$resources" />', ['resources' => collect([$resource])])
             ->assertSee($icon->getUrl());

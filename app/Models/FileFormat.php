@@ -20,6 +20,8 @@ class FileFormat extends Model implements HasMedia
     {
         $this->addMediaCollection('icon')->useDisk('public')
             ->acceptsMimeTypes(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])->singleFile();
+        $this->addMediaCollection('list_icon')->useDisk('public')
+            ->acceptsMimeTypes(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])->singleFile();
     }
 
     public static function forFilename(string $filename): ?self

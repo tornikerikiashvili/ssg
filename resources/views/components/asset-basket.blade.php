@@ -122,7 +122,15 @@
             row.querySelector('[data-item-size]').textContent = formatSize(asset.size);
             row.querySelector('[data-item-type]').textContent = asset.type || 'FILE';
             const icons = { PNG: 'PNG.svg', MP4: 'mp4.svg', EPS: 'EPS.svg' };
-            row.querySelector('img').src = @json(asset('client-design/images')) + '/' + (icons[asset.type] || 'Zip.svg');
+            const preview = row.querySelector('img');
+            preview.classList.toggle('downloads_icon-jpeg', ['jpg', 'jpeg'].includes(String(asset.type || '').toLowerCase()));
+            preview.alt = asset.title + ' preview';
+            preview.onerror = () => {
+                preview.onerror = null;
+                preview.classList.remove('downloads_icon-jpeg');
+                preview.src = @json(asset('client-design/images')) + '/' + (icons[asset.type] || 'Zip.svg');
+            };
+            preview.src = @json(route('resources.preview', '__RESOURCE__')).replace('__RESOURCE__', String(asset.id));
             const remove = row.querySelector('[data-remove-asset]');
             remove.setAttribute('aria-label', 'Remove ' + asset.title);
             remove.addEventListener('click', event => { event.preventDefault(); if (busy) return; basket = basket.filter(item => item.id !== asset.id); error.hidden = true; render(); downloadButton.focus(); });

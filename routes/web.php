@@ -27,6 +27,7 @@ Route::middleware(['auth', EnsureClientAccess::class])->group(function () {
     Route::get('/resource/{resourceItem}', [ClientPortalController::class, 'resource'])->whereNumber('resourceItem')->name('resources.show');
     Route::get('/resource/{resourceItem}/download', [ClientPortalController::class, 'download'])->whereNumber('resourceItem')->name('resources.download');
     Route::get('/resource/{resourceItem}/thumbnail', [ClientPortalController::class, 'thumbnail'])->whereNumber('resourceItem')->name('resources.thumbnail');
+    Route::get('/resource/{resourceItem}/preview', [ClientPortalController::class, 'assetPreview'])->whereNumber('resourceItem')->name('resources.preview');
     Route::get('/updates', [ClientPortalController::class, 'updates'])->name('updates.index');
     Route::get('/roadmap', [ClientPortalController::class, 'roadmap'])->name('roadmap.index');
     Route::get('/engagement-tools', [ClientPortalController::class, 'tools'])->name('tools.index');

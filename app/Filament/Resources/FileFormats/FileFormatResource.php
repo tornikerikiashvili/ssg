@@ -20,7 +20,13 @@ class FileFormatResource extends Resource
 
     protected static ?string $recordTitleAttribute = 'extension';
 
-    protected static string|UnitEnum|null $navigationGroup = 'Catalog';
+    protected static string|UnitEnum|null $navigationGroup = 'Materials';
+
+    protected static ?string $navigationLabel = 'Asset Format Icons';
+
+    protected static ?string $pluralModelLabel = 'Asset Format Icons';
+
+    protected static ?string $modelLabel = 'asset format icon';
 
     public static function canCreate(): bool
     {
@@ -30,17 +36,23 @@ class FileFormatResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('extension')->disabled()->helperText('Detected automatically during Dropbox sync.'),
+            TextInput::make('extension')->disabled()->helperText('Detected automatically during Dropbox sync.')->columnSpanFull(),
             SpatieMediaLibraryFileUpload::make('icon')->collection('icon')->disk('public')->image()
+                ->label('Asset card icon')
                 ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])->maxSize(2048)
                 ->helperText('SVG, PNG, WebP or JPG, up to 2 MB. Used when an image thumbnail is unavailable.'),
-        ]);
+            SpatieMediaLibraryFileUpload::make('list_icon')->collection('list_icon')->disk('public')->image()
+                ->label('Recent downloads & basket icon')
+                ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])->maxSize(2048)
+                ->helperText('SVG, PNG, WebP or JPG, up to 2 MB. Used in Recent Downloads and the Download Basket when no thumbnail is available. Falls back to the asset card icon if empty.'),
+        ])->columns(2);
     }
 
     public static function table(Table $table): Table
     {
         return $table->columns([
             SpatieMediaLibraryImageColumn::make('icon')->collection('icon')->label('Fallback icon'),
+            SpatieMediaLibraryImageColumn::make('list_icon')->collection('list_icon')->label('Recent downloads & basket icon'),
             TextColumn::make('extension')->searchable()->sortable()->formatStateUsing(fn (string $state): string => mb_strtoupper($state)),
             TextColumn::make('created_at')->label('Discovered')->since(),
         ])->recordActions([EditAction::make()])->defaultSort('extension');
