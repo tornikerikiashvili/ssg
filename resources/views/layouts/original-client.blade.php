@@ -29,6 +29,7 @@
     </style>
 </head>
 <body>
+<x-client-theme />
   <div>
     <div class="global-styles w-embed">
       <style>
@@ -821,16 +822,6 @@
       $('.button_inner').each(function() {
         $(this).attr('data-text', $(this).find('.button_text').text())
       })
-      // Switch color theme
-      function updateThemeLabel() {
-        $('[data-theme-label]').text($('body').hasClass('light-mode') ? 'Dark' : 'Light');
-      }
-      updateThemeLabel();
-      $('[data-switch-theme]').click(function(event) {
-        event.preventDefault();
-        $('body').toggleClass('light-mode');
-        updateThemeLabel();
-      });
       // Expand/collapse sidebar
       $('.sidebar_collapse-button').click(function() {
         $('.sidebar, [data-collapsing]').toggleClass('is-collapsed');
