@@ -67,6 +67,35 @@ class DropboxClient
         return array_values(array_filter($entries, fn (array $entry): bool => $entry['.tag'] === 'file'));
     }
 
+    public function thumbnail(string $fileId): string
+    {
+        $response = $this->request()->timeout(15)->withOptions(['stream' => true])->withHeaders([
+            'Dropbox-API-Arg' => json_encode([
+                'resource' => ['.tag' => 'path', 'path' => $fileId],
+                'format' => 'png', 'size' => 'w256h256', 'mode' => 'strict',
+                'preserve_transparency' => true,
+            ], JSON_THROW_ON_ERROR),
+        ])->withBody('', 'application/octet-stream')->post('https://content.dropboxapi.com/2/files/get_thumbnail_v2');
+        $body = $response->toPsrResponse()->getBody();
+        try {
+            if (! $response->successful()) {
+                throw new RuntimeException('Dropbox thumbnail is unavailable.');
+            }
+            $bytes = '';
+            while (! $body->eof() && strlen($bytes) <= 2 * 1024 * 1024) {
+                $bytes .= $body->read(65536);
+            }
+            $image = @getimagesizefromstring($bytes);
+            if (strlen($bytes) > 2 * 1024 * 1024 || ! $image || $image[2] !== IMAGETYPE_PNG || $image[0] > 256 || $image[1] > 256) {
+                throw new RuntimeException('Invalid Dropbox thumbnail.');
+            }
+
+            return $bytes;
+        } finally {
+            $body->close();
+        }
+    }
+
     public function downloadTo(string $fileId, string $destination, ?int $maxBytes = null): void
     {
         try {

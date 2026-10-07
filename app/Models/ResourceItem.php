@@ -7,6 +7,20 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ResourceItem extends PortalContent
 {
+    protected $with = ['fileFormat'];
+
+    public function fileFormat(): BelongsTo
+    {
+        return $this->belongsTo(FileFormat::class);
+    }
+
+    public function supportsDropboxThumbnail(): bool
+    {
+        return (bool) $this->dropbox_file_id && (bool) $this->dropbox_available
+            && $this->file_size <= 20 * 1024 * 1024
+            && in_array(strtolower(pathinfo($this->file_path ?? '', PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'tiff', 'tif', 'gif', 'webp', 'ppm', 'bmp'], true);
+    }
+
     public const KINDS = ['download' => 'Download', 'documentation' => 'Documentation', 'license' => 'License', 'certificate' => 'Certification'];
 
     public const DEMO_FILES = [

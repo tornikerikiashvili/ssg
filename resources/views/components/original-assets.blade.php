@@ -2,7 +2,18 @@
 <div class="assets_list">
 @forelse($resources as $resource)
 <div class="assets_item" data-resource-id="{{ $resource->id }}" data-category-id="{{ $resource->catalog_option_id }}" data-title="{{ $resource->title }}" data-created-at="{{ $resource->created_at?->timestamp ?? 0 }}">
-                <div class="assets_item-icon-wrapper"><x-asset-file-icon :extension="pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION)" />
+                <div class="assets_item-icon-wrapper">
+                  <div data-asset-fallback>
+                    @if($iconUrl = $resource->fileFormat?->getFirstMediaUrl('icon'))
+                      <img src="{{ $iconUrl }}" class="assets_item-icon" width="90" height="90" alt="{{ strtoupper(pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION)) }} file" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.hidden=false;">
+                      <div hidden><x-asset-file-icon :extension="pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION)" /></div>
+                    @else
+                      <x-asset-file-icon :extension="pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION)" />
+                    @endif
+                  </div>
+                  @if($resource->supportsDropboxThumbnail())
+                    <img src="{{ route('resources.thumbnail', $resource->id) }}" class="assets_item-icon assets_item-thumbnail" width="90" height="90" alt="{{ $resource->title }} preview" loading="lazy" decoding="async" style="opacity:0" onload="this.style.opacity='1'; this.previousElementSibling.style.visibility='hidden';" onerror="this.remove();">
+                  @endif
                   <div class="assets_item-checkbox"></div>
                 </div>
                 <div class="assets_item-inner">

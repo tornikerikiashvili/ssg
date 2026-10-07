@@ -3141,6 +3141,14 @@ figcaption {
   left: 4px;
 }
 
+.assets_item-thumbnail {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  object-fit: contain;
+  background-color: transparent;
+}
+
 .assets_item-checkbox.is-active {
   border-color: var(--green);
   background-color: var(--transparent);

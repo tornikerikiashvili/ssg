@@ -3,6 +3,7 @@
 namespace App;
 
 use App\Models\CatalogOption;
+use App\Models\FileFormat;
 use App\Models\Game;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -44,11 +45,13 @@ class SyncDropboxGame
                     $categoryName = $parent === '.' ? 'General' : str_replace('/', ' / ', $parent);
                     $category = CatalogOption::firstOrCreate(['kind' => 'asset', 'name' => mb_substr($categoryName, 0, 255)]);
                     $available = $file['is_downloadable'] ?? true;
+                    $format = FileFormat::forFilename($file['name']);
                     $current->resources()->updateOrCreate(['dropbox_file_id' => $file['id']], [
                         'title' => $file['name'], 'slug' => 'dropbox-'.$game->id.'-'.hash('sha256', $file['id']),
                         'kind' => 'download', 'file_path' => $file['name'], 'dropbox_path' => $file['path_display'],
                         'dropbox_revision' => $file['rev'], 'file_size' => $file['size'],
                         'dropbox_available' => $available, 'catalog_option_id' => $category->id,
+                        'file_format_id' => $format?->id,
                         'is_published' => true, 'is_demo' => false, 'company_id' => null,
                     ]);
                     $count += (int) $available;

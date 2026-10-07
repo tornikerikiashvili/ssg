@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\DropboxClient;
+use App\DropboxThumbnail;
 use App\Models\Announcement;
 use App\Models\CatalogOption;
 use App\Models\EngagementTool;
@@ -13,6 +14,7 @@ use App\Models\RoadmapItem;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
@@ -22,6 +24,18 @@ use ZipArchive;
 
 class ClientPortalController extends Controller
 {
+    public function thumbnail(Request $request, int $resourceItem, DropboxThumbnail $thumbnails): Response
+    {
+        $resource = ResourceItem::visibleTo($request->user())->findOrFail($resourceItem);
+        $bytes = $thumbnails->get($resource);
+        abort_if($bytes === null, 404);
+
+        return response($bytes, 200, [
+            'Content-Type' => 'image/png', 'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     public function search(Request $request): RedirectResponse
     {
         $filters = $request->validate([
