@@ -4,9 +4,11 @@ namespace Tests\Feature;
 
 use App\Models\Company;
 use App\Models\User;
+use App\Notifications\PasswordChanged;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -78,6 +80,7 @@ class AccountTest extends TestCase
 
     public function test_phone_and_name_can_change_without_replacing_password(): void
     {
+        Notification::fake();
         $user = $this->client();
         $original = $user->password;
         $this->actingAs($user)->patch('/account/contact', ['email' => $user->email, 'phone' => '123'])
@@ -87,14 +90,17 @@ class AccountTest extends TestCase
         $this->assertSame('123', $user->fresh()->phone);
         $this->assertSame('Updated Partner', $user->fresh()->name);
         $this->assertSame($original, $user->fresh()->password);
+        Notification::assertNothingSent();
     }
 
     public function test_password_change_requires_current_password_and_confirmation(): void
     {
+        Notification::fake();
         $user = $this->client();
         $this->actingAs($user)->patch('/account/login-details', [
             'name' => $user->name, 'password' => 'new-secure-password', 'password_confirmation' => 'different',
         ])->assertSessionHasErrorsIn('loginDetails', ['password', 'current_password']);
+        Notification::assertNothingSent();
         $this->assertTrue(Hash::check('password', $user->fresh()->password));
         $this->patch('/account/login-details', [
             'name' => $user->name, 'password' => 'short', 'password_confirmation' => 'short', 'current_password' => 'wrong',
@@ -103,6 +109,7 @@ class AccountTest extends TestCase
 
     public function test_password_is_hashed_and_old_sessions_and_remember_token_are_revoked(): void
     {
+        Notification::fake();
         $user = $this->client();
         $token = $user->remember_token;
         config(['session.driver' => 'database']);
@@ -114,5 +121,14 @@ class AccountTest extends TestCase
         $this->assertTrue(Hash::check('new-secure-password', $user->fresh()->password));
         $this->assertNotSame($token, $user->fresh()->remember_token);
         $this->assertDatabaseMissing('sessions', ['id' => 'old-device']);
+        Notification::assertSentToTimes($user, PasswordChanged::class, 1);
+    }
+
+    public function test_password_notification_explains_how_to_report_unrecognized_changes(): void
+    {
+        $user = User::factory()->make();
+        $message = (new PasswordChanged)->toMail($user);
+        $this->assertStringContainsString('contact the SmartSoft administration', implode(' ', $message->introLines));
+        $this->assertStringNotContainsString($user->password, $message->render()->toHtml());
     }
 }

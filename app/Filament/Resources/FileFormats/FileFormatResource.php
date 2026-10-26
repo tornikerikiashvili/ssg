@@ -36,7 +36,7 @@ class FileFormatResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return $schema->components([
-            TextInput::make('extension')->disabled()->helperText('Detected automatically during Dropbox sync.')->columnSpanFull(),
+            TextInput::make('extension')->disabled()->formatStateUsing(fn (?string $state): string => $state ?: 'General')->helperText('General is used when a file has no format-specific icon. Other formats are detected during Dropbox sync.')->columnSpanFull(),
             SpatieMediaLibraryFileUpload::make('icon')->collection('icon')->disk('public')->image()
                 ->label('Asset card icon')
                 ->acceptedFileTypes(['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'])->maxSize(2048)
@@ -53,7 +53,7 @@ class FileFormatResource extends Resource
         return $table->columns([
             SpatieMediaLibraryImageColumn::make('icon')->collection('icon')->label('Fallback icon'),
             SpatieMediaLibraryImageColumn::make('list_icon')->collection('list_icon')->label('Recent downloads & basket icon'),
-            TextColumn::make('extension')->searchable()->sortable()->formatStateUsing(fn (string $state): string => mb_strtoupper($state)),
+            TextColumn::make('extension')->searchable()->sortable()->placeholder('General')->formatStateUsing(fn (string $state): string => $state === '' ? 'General' : mb_strtoupper($state)),
             TextColumn::make('created_at')->label('Discovered')->since(),
         ])->recordActions([EditAction::make()])->defaultSort('extension');
     }

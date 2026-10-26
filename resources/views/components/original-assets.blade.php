@@ -1,14 +1,12 @@
 @props(['resources'])
+@php($generalIconUrl = \App\Models\FileFormat::generalIconUrl())
 <div class="assets_list">
 @forelse($resources as $resource)
 <div class="assets_item" data-resource-id="{{ $resource->id }}" data-category-id="{{ $resource->catalog_option_id }}" data-title="{{ $resource->title }}" data-created-at="{{ $resource->created_at?->timestamp ?? 0 }}">
                 <div class="assets_item-icon-wrapper">
                   <div data-asset-fallback>
-                    @if($iconUrl = $resource->fileFormat?->getFirstMediaUrl('icon'))
-                      <img src="{{ $iconUrl }}" class="assets_item-icon" width="90" height="90" alt="{{ strtoupper(pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION)) }} file" loading="lazy" onerror="this.style.display='none'; this.nextElementSibling.hidden=false;">
-                      <div hidden><x-asset-file-icon :extension="pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION)" /></div>
-                    @else
-                      <x-asset-file-icon :extension="pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION)" />
+                    @if($iconUrl = ($resource->fileFormat?->getFirstMediaUrl('icon') ?: $generalIconUrl))
+                      <img src="{{ $iconUrl }}" class="assets_item-icon" width="90" height="90" alt="{{ strtoupper(pathinfo($resource->file_path ?? '', PATHINFO_EXTENSION)) }} file" loading="lazy" onerror="this.style.display='none';">
                     @endif
                   </div>
                   @if($resource->supportsDropboxThumbnail())

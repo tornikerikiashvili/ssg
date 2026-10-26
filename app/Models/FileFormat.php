@@ -16,6 +16,13 @@ class FileFormat extends Model implements HasMedia
 
     protected $with = ['media'];
 
+    public static function generalIconUrl(bool $forList = false): string
+    {
+        $format = static::where('extension', '')->first();
+
+        return ($forList ? $format?->getFirstMediaUrl('list_icon') : '') ?: ($format?->getFirstMediaUrl('icon') ?? '');
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('icon')->useDisk('public')

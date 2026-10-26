@@ -37,6 +37,8 @@ class User extends Authenticatable implements FilamentUser
             'password' => 'hashed',
             'is_admin' => 'boolean',
             'is_active' => 'boolean',
+            'requires_password_setup' => 'boolean',
+            'invitation_expires_at' => 'datetime',
         ];
     }
 
@@ -53,7 +55,7 @@ class User extends Authenticatable implements FilamentUser
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $panel->getId() === 'admin' && $this->is_admin && $this->is_active;
+        return $panel->getId() === 'admin' && $this->is_admin && $this->is_active && ! $this->requires_password_setup;
     }
 
     public function canAccessClientArea(): bool

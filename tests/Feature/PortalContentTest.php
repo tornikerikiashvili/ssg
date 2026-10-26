@@ -403,7 +403,7 @@ class PortalContentTest extends TestCase
         $this->actingAs($this->client())->get('/games/'.$game->slug)->assertNotFound();
     }
 
-    public function test_admin_can_create_company_and_partner_user_with_hashed_password(): void
+    public function test_admin_can_create_company_and_invite_partner_with_generated_password(): void
     {
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         Livewire::test(ManageCompanies::class)->callAction('create', data: ['name' => 'CMS Partner', 'is_active' => true])->assertHasNoActionErrors();
@@ -413,7 +413,8 @@ class PortalContentTest extends TestCase
             'password' => 'DemoPassword123!', 'is_active' => true,
         ])->assertHasNoActionErrors();
         $user = User::where('email', 'new@example.test')->firstOrFail();
-        $this->assertTrue(Hash::check('DemoPassword123!', $user->password));
+        $this->assertFalse(Hash::check('DemoPassword123!', $user->password));
+        $this->assertTrue($user->requires_password_setup);
         $this->assertFalse($user->is_admin);
         $this->assertSame($company->id, $user->company_id);
     }

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\Auth\AuthenticatedSessionController;
+use App\Http\Controllers\Auth\PasswordSetupController;
 use App\Http\Controllers\ClientPortalController;
 use App\Http\Middleware\EnsureClientAccess;
 use Illuminate\Support\Facades\Route;
@@ -9,6 +10,11 @@ use Illuminate\Support\Facades\Route;
 Route::redirect('/', '/dashboard');
 
 Route::middleware('guest')->group(function () {
+    Route::get('/forgot-password', [PasswordSetupController::class, 'requestForm'])->name('password.request');
+    Route::post('/forgot-password', [PasswordSetupController::class, 'send'])->middleware('throttle:5,1')->name('password.email');
+    Route::get('/password/verify', [PasswordSetupController::class, 'codeForm'])->name('password.code');
+    Route::post('/password/verify', [PasswordSetupController::class, 'verify'])->middleware('throttle:10,1')->name('password.verify');
+    Route::post('/password/set', [PasswordSetupController::class, 'store'])->middleware('throttle:5,1')->name('password.store');
     Route::get('/login', [AuthenticatedSessionController::class, 'create'])->name('login');
     Route::post('/login', [AuthenticatedSessionController::class, 'store'])->middleware('throttle:20,1');
 });

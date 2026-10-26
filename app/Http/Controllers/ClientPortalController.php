@@ -7,6 +7,7 @@ use App\DropboxThumbnail;
 use App\Models\Announcement;
 use App\Models\CatalogOption;
 use App\Models\EngagementTool;
+use App\Models\FileFormat;
 use App\Models\Game;
 use App\Models\ResourceDownload;
 use App\Models\ResourceItem;
@@ -31,7 +32,7 @@ class ClientPortalController extends Controller
         if (($bytes = $thumbnails->get($resource)) !== null) {
             return response($bytes, 200, ['Content-Type' => 'image/png'] + $headers);
         }
-        if ($iconUrl = ($resource->fileFormat?->getFirstMediaUrl('list_icon') ?: $resource->fileFormat?->getFirstMediaUrl('icon'))) {
+        if ($iconUrl = ($resource->fileFormat?->getFirstMediaUrl('list_icon') ?: $resource->fileFormat?->getFirstMediaUrl('icon') ?: FileFormat::generalIconUrl(forList: true))) {
             return redirect()->away($iconUrl, 302, $headers);
         }
 

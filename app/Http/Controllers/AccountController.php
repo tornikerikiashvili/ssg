@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Notifications\PasswordChanged;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +61,7 @@ class AccountController extends Controller
                     ->where('user_id', $user->id)->where('id', '!=', $request->session()->getId())->delete();
             }
             $request->session()->regenerate();
+            $user->notify(new PasswordChanged);
         }
 
         return to_route('account.show')->with('status', 'Login details saved.');

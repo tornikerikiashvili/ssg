@@ -44,7 +44,7 @@ class LoginRequest extends FormRequest
 
         if (! Auth::attemptWhen(
             $this->only('email', 'password'),
-            fn ($user) => $user->canAccessClientArea(),
+            fn ($user) => $user->canAccessClientArea() && (! $user->requires_password_setup || $user->invitation_expires_at?->isFuture()),
             $this->boolean('remember'),
         )) {
             RateLimiter::hit($key, 60);

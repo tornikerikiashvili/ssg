@@ -2,19 +2,23 @@
 
 namespace App\Filament\Resources\Users;
 
+use App\AccountOnboarding;
 use App\Filament\Resources\Users\Pages\ManageUsers;
 use App\Models\User;
+use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\IconColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use UnitEnum;
@@ -38,11 +42,6 @@ class UserResource extends Resource
             Select::make('company_id')->relationship('company', 'name')->searchable()->preload()
                 ->required(fn (?User $record): bool => ! $record?->is_admin)
                 ->helperText('Users inherit the regions configured for their company.'),
-            TextInput::make('password')->password()->revealable()->minLength(12)->maxLength(255)
-                ->required(fn (string $operation): bool => $operation === 'create')
-                ->dehydrated(fn (?string $state): bool => filled($state))
-                ->afterStateHydrated(fn (TextInput $component) => $component->state(''))
-                ->helperText('Leave blank when editing to keep the existing password.'),
             Toggle::make('is_active')->default(true)
                 ->disabled(fn (?User $record): bool => $record?->id === auth()->id()),
         ]);
@@ -51,11 +50,20 @@ class UserResource extends Resource
     public static function saveUser(User $record, array $data): User
     {
         abort_unless(auth()->user()?->canAccessPanel(Filament::getPanel('admin')), 403);
-        $data = Arr::only($data, ['name', 'email', 'password', 'company_id', 'is_active']);
+        $data = Arr::only($data, ['name', 'email', 'company_id', 'is_active']);
         if ($record->id === auth()->id() && isset($data['is_active']) && ! $data['is_active']) {
             throw ValidationException::withMessages(['data.is_active' => 'You cannot disable your own account.']);
         }
-        $record->forceFill($data)->save();
+        DB::transaction(function () use ($record, $data): void {
+            $isNew = ! $record->exists;
+            if ($isNew) {
+                $record->password = Str::random(64);
+            }
+            $record->forceFill($data)->save();
+            if ($isNew) {
+                app(AccountOnboarding::class)->invite($record);
+            }
+        });
 
         return $record;
     }
@@ -68,7 +76,17 @@ class UserResource extends Resource
             TextColumn::make('company.name')->placeholder('SmartSoft team'),
             IconColumn::make('is_admin')->label('Administrator')->boolean(),
             IconColumn::make('is_active')->boolean(),
+            IconColumn::make('requires_password_setup')->label('Invitation pending')->boolean(),
         ])->recordActions([
+            Action::make('resendInvitation')->label('Resend invitation')->requiresConfirmation()
+                ->modalDescription('A new temporary password will be emailed to this user. The previous invitation will stop working.')
+                ->visible(fn (User $record): bool => $record->requires_password_setup && $record->canAccessClientArea())
+                ->action(function (User $record): void {
+                    abort_unless(auth()->user()?->canAccessPanel(Filament::getPanel('admin')), 403);
+                    abort_unless($record->requires_password_setup && $record->canAccessClientArea(), 403);
+                    app(AccountOnboarding::class)->invite($record);
+                    Notification::make()->title('Invitation queued for delivery')->success()->send();
+                }),
             EditAction::make()->using(fn (User $record, array $data): User => static::saveUser($record, $data)),
         ]);
     }

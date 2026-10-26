@@ -167,7 +167,7 @@ class AssetPreviewTest extends TestCase
         app(SyncDropboxGame::class)->sync($game);
         app(SyncDropboxGame::class)->sync($game);
 
-        $this->assertDatabaseCount('file_formats', 2);
+        $this->assertDatabaseCount('file_formats', 3);
         $this->assertDatabaseHas('file_formats', ['extension' => 'efs']);
         $this->assertSame($icon->id, $format->fresh()->getFirstMedia('icon')->id);
         $this->assertSame(2, $game->resources()->where('file_format_id', $format->id)->count());
@@ -228,6 +228,34 @@ class AssetPreviewTest extends TestCase
         $resource = ResourceItem::factory()->make(['file_format_id' => $format->id, 'file_path' => 'video.mp4', 'id' => 1]);
         $this->blade('<x-original-assets :resources="$resources" />', ['resources' => collect([$resource])])
             ->assertSee($icon->getUrl());
+    }
+
+    public function test_general_icon_can_be_uploaded_and_used_for_unmapped_files(): void
+    {
+        Storage::fake('public');
+        $general = FileFormat::where('extension', '')->firstOrFail();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Livewire::test(ManageFileFormats::class)
+            ->assertSee('General')
+            ->callAction(TestAction::make('edit')->table($general), data: [
+                'icon' => UploadedFile::fake()->image('general.png'),
+            ])->assertHasNoActionErrors();
+        $url = $general->fresh()->getFirstMediaUrl('icon');
+        $this->assertNotEmpty($url);
+        $asset = $this->imageAsset(['file_path' => 'unknown.xyz']);
+        $user = User::factory()->for(Company::factory())->create();
+        $user->company->purchasedGames()->attach($asset->game_id);
+        $this->actingAs($user);
+
+        $this->blade('<x-original-assets :resources="$resources" />', ['resources' => collect([$asset])])->assertSee($url);
+        $this->get(route('resources.preview', $asset))->assertRedirect($url);
+
+        $format = FileFormat::factory()->create(['extension' => 'xyz']);
+        $specific = $format->addMedia(UploadedFile::fake()->image('specific.png'))->toMediaCollection('icon');
+        $asset->update(['file_format_id' => $format->id]);
+        $this->blade('<x-original-assets :resources="$resources" />', ['resources' => collect([$asset->fresh()])])
+            ->assertSee($specific->getUrl())->assertDontSee($url);
+        $this->get(route('resources.preview', $asset))->assertRedirect($specific->getUrl());
     }
 
     public function test_admin_can_assign_an_icon_and_partner_cannot_access_format_management(): void

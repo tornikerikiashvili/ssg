@@ -21,6 +21,14 @@ class EnsureClientAccess
             ]);
         }
 
+        if ($request->user()->requires_password_setup) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+
+            return redirect()->route('password.request')->withErrors(['email' => 'Please finish setting your password before accessing the portal.']);
+        }
+
         return $next($request);
     }
 }

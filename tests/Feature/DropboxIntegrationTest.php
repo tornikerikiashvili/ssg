@@ -83,19 +83,20 @@ class DropboxIntegrationTest extends TestCase
         $this->actingAs($user)->get('/games/'.$game->slug)->assertOk()->assertSee('logo.svg')->assertSee('Logos');
     }
 
-    #[TestWith(['WEBP', 'image'])]
-    #[TestWith(['mp4', 'video'])]
-    #[TestWith(['zip', 'archive'])]
-    #[TestWith(['svg', 'design'])]
-    #[TestWith(['pdf', 'pdf'])]
-    #[TestWith(['docx', 'document'])]
-    #[TestWith(['mp3', 'audio'])]
-    #[TestWith(['xlsx', 'spreadsheet'])]
-    #[TestWith(['pptx', 'presentation'])]
-    #[TestWith(['json', 'code'])]
-    #[TestWith(['unknown', 'file'])]
-    #[TestWith(['', 'file'])]
-    public function test_asset_cards_show_icons_for_the_file_format(string $extension, string $type): void
+    #[TestWith(['WEBP'])]
+    #[TestWith(['mp4'])]
+    #[TestWith(['zip'])]
+    #[TestWith(['svg'])]
+    #[TestWith(['pdf'])]
+    #[TestWith(['docx'])]
+    #[TestWith(['txt'])]
+    #[TestWith(['mp3'])]
+    #[TestWith(['xlsx'])]
+    #[TestWith(['pptx'])]
+    #[TestWith(['json'])]
+    #[TestWith(['unknown'])]
+    #[TestWith([''])]
+    public function test_asset_cards_do_not_show_hardcoded_file_icons(string $extension): void
     {
         $resource = ResourceItem::factory()->make([
             'id' => 1, 'file_path' => 'asset'.($extension ? '.'.$extension : ''),
@@ -104,8 +105,9 @@ class DropboxIntegrationTest extends TestCase
 
         $view = $this->blade('<x-original-assets :resources="$resources" />', ['resources' => collect([$resource])]);
 
-        $view->assertSee('data-file-icon="'.$type.'"', false)
-            ->assertSee('aria-label="'.strtoupper($extension ?: 'file').' file"', false);
+        $view->assertDontSee('data-file-icon=', false)
+            ->assertSee($resource->title)
+            ->assertSee('Download');
     }
 
     #[TestWith(['/games/dropbox-categories'])]
